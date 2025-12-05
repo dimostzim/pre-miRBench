@@ -38,7 +38,7 @@ case "$MODEL" in
 esac
 
 ARGS="--winSize $WIN_SIZE --step $STEP --staticPredFlag $STATIC_PRED_FLAG --modelType $MODEL_TYPE --classNum $CLASS_NUM"
-ARGS="$ARGS --model $SCRIPT_DIR/mustard_paper/pretrained_models/$MODEL/CNNonRaw.hdf5"
+ARGS="$ARGS --model $SCRIPT_DIR/data/models/$MODEL/CNNonRaw.hdf5"
 ARGS="$ARGS --inputMode $INPUT_MODE --targetIntervals $INPUT --genome $GENOME"
 ARGS="$ARGS --dir $OUTPUT --modelDirName results"
 [[ -n "$THREADS" ]] && ARGS="$ARGS --threads $THREADS"

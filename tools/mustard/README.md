@@ -9,7 +9,6 @@ Requires conda: https://docs.anaconda.com/miniconda/install/
 ./setup.sh
 ```
 
-
 ## Usage
 - Activate the environment:
 ```bash
@@ -18,8 +17,9 @@ conda activate mustard
 
 Test on provided chr14 test data with the best miRNA model (MuStARD-mirSFC-U):
 ```bash
-./run_inference.sh --input mustard_paper/test_loci/miRNA/hsa/hsa.hairpin.slop5k.bothStrands.chr14.bed --genome data/chr14.fa --consDir data --output results --chromList chr14 --model MuStARD-mirSFC-U
+./run_inference.sh --input data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed --genome data/chr14.fa --consDir data --output results --chromList chr14 --model MuStARD-mirSFC-U
 ```
+
 
 Parameters (MuStARD.pl predict):
 - `--input` (required): input BED file.
@@ -50,6 +50,7 @@ Parameters (MuStARD.pl predict):
 | MuStARD-mirSFC-U | S+F+C |
 
 S=Sequence, F=RNAfold, C=Conservation
+
 
 ## Data
 Full genome:
