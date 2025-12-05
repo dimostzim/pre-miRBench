@@ -1,0 +1,20 @@
+name: mustard
+channels:
+  - conda-forge
+  - bioconda
+  - anaconda
+dependencies:
+  - python=2.7
+  - perl
+  - perl-set-intervaltree
+  - perl-parallel-forkmanager
+  - perl-io-gzip
+  - viennarna
+  - bedtools
+  - r-base
+  - r-ggplot2
+  - pip
+  - pip:
+      - tensorflow==1.15
+      - keras==2.3.1
+
