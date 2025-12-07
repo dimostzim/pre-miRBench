@@ -1,0 +1,8 @@
+data/
+mustard_src/
+results/
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+*.swo
