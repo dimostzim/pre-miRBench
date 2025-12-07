@@ -6,69 +6,59 @@ import subprocess
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--input", required=True)
+
+    p.add_argument("--targetIntervals", required=True)
     p.add_argument("--genome", required=True)
-    p.add_argument("--output", default="results")
+    p.add_argument("--consDir", required=True)
+    
+    p.add_argument("--chromList", default="all")
+    p.add_argument("--dir", default="results")
     p.add_argument("--model", default="MuStARD-mirSFC-U")
-    p.add_argument("--cons", required=True)
-    p.add_argument("--chrom", default="all")
+    p.add_argument("--classNum", type=int, default=2)
+    p.add_argument("--modelType", default="CNN")
+    
+    # optional
+    p.add_argument("--modelDirName", default="results")
+    p.add_argument("--intermDir", default="same")
+    p.add_argument("--winSize", type=int, default=100)
+    p.add_argument("--staticPredFlag", type=int, default=0)
+    p.add_argument("--inputMode", default="sequence,RNAfold,conservation")  # best model uses all 3 sequence types
     p.add_argument("--threads", type=int, default=10)
-    p.add_argument("--win-size", type=int, default=100)
     p.add_argument("--step", type=int, default=5)
-    p.add_argument("--static-pred-flag", type=int, default=0)
-    p.add_argument("--model-type", default="CNN")
-    p.add_argument("--class-num", default="2")
     args = p.parse_args()
 
-    base = os.path.dirname(os.path.abspath(__file__))
-    model_file = os.path.join(base, "data", "models", args.model, "CNNonRaw.hdf5")
-    perl_script = os.path.join(base, "mustard_src", "MuStARD.pl")
+    perl_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mustard_src", "MuStARD.pl")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    if not os.path.isdir(args.output):
-        os.makedirs(args.output)
+    # resolve model name to full path 
+    model_path = os.path.join(base_dir, "data", "models", args.model, "CNNonRaw.hdf5")
+    args.model = model_path
 
-    input_mode = {
-        "MuStARD-mirS": "sequence",
-        "MuStARD-mirF": "RNAfold",
-        "MuStARD-mirSF": "sequence,RNAfold",
-        "MuStARD-mirSC": "sequence,conservation",
-        "MuStARD-mirFC": "RNAfold,conservation",
-    }.get(args.model, "sequence,RNAfold,conservation")
+    if not os.path.isdir(args.dir):
+        os.makedirs(args.dir)
 
     cmd = [
         "perl",
         perl_script,
         "predict",
-        "--winSize",
-        str(args.win_size),
-        "--step",
-        str(args.step),
-        "--staticPredFlag",
-        str(args.static_pred_flag),
-        "--modelType",
-        args.model_type,
-        "--classNum",
-        str(args.class_num),
-        "--model",
-        model_file,
-        "--inputMode",
-        input_mode,
-        "--targetIntervals",
-        os.path.abspath(args.input),
-        "--genome",
-        os.path.abspath(args.genome),
-        "--dir",
-        os.path.abspath(args.output),
-        "--modelDirName",
-        "results",
-        "--threads",
-        str(args.threads),
+        "--chromList", args.chromList,
+        "--targetIntervals", os.path.abspath(args.targetIntervals),
+        "--genome", os.path.abspath(args.genome),
+        "--consDir", os.path.abspath(args.consDir),
+        "--dir", os.path.abspath(args.dir),
+        "--model", os.path.abspath(args.model),
+        "--classNum", str(args.classNum),
+        "--modelType", args.modelType,
+        "--winSize", str(args.winSize),
+        "--step", str(args.step),
+        "--staticPredFlag", str(args.staticPredFlag),
+        "--inputMode", args.inputMode,
+        "--threads", str(args.threads),
+        "--modelDirName", args.modelDirName,
     ]
-
-    if args.cons:
-        cmd.extend(["--consDir", os.path.abspath(args.cons)])
-    if args.chrom:
-        cmd.extend(["--chromList", args.chrom])
+    
+    if args.intermDir != "same":
+        cmd.extend(["--intermDir", os.path.abspath(args.intermDir)])
 
     subprocess.check_call(cmd)
 
