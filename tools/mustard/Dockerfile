@@ -1,31 +1,23 @@
 # this is an old miniconda version with py2.7 support
 FROM continuumio/miniconda3:4.12.0
 
-ARG GPU=false
-
 WORKDIR /opt/mustard
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY environment*.yml ./
+COPY environment.yml .
 
 # normally miniconda supports mamba but this old version does not lol. so we install mamba for faster solving
 # because building a linux image on ARM Mac and installing old packages is painfully slow.
 
-# then we create env with or without gpu
+# currently we only do cpu version only
 
 RUN conda install -n base -c conda-forge mamba -y && \
-    if [ "$GPU" = "true" ]; then \
-        mamba env create -f environment-gpu.yml && \
-        ln -s /opt/conda/envs/mustard-gpu /opt/conda/envs/active; \
-    else \
-        mamba env create -f environment.yml && \
-        ln -s /opt/conda/envs/mustard /opt/conda/envs/active; \
-    fi && \
+    mamba env create -f environment.yml && \
     conda clean -afy
-ENV PATH="/opt/conda/envs/active/bin:${PATH}"
+ENV PATH="/opt/conda/envs/mustard/bin:${PATH}"
 
 # mustard source and pretrained models
 RUN git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src

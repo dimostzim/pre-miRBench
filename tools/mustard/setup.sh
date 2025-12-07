@@ -2,16 +2,14 @@
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-GPU_FLAG=""
-ENV_FILE="environment.yml"
-
-[[ "$*" == *"--gpu"* ]] && GPU_FLAG="--build-arg GPU=true" && ENV_FILE="environment-gpu.yml"
-
 if [[ "$*" == *"--docker"* ]]; then
     image_tag="${IMAGE_TAG:-mustard:latest}"
-    docker build --platform linux/amd64 $GPU_FLAG -t "$image_tag" .
+    docker build --platform linux/amd64 -t "$image_tag" .
     exit 0
 fi
+
+ENV_FILE="environment.yml"
+[[ "$*" == *"--gpu"* ]] && ENV_FILE="environment-gpu.yml"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
