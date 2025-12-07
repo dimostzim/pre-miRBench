@@ -8,12 +8,9 @@ if [[ "$*" == *"--docker"* ]]; then
     exit 0
 fi
 
-ENV_FILE="environment.yml"
-[[ "$*" == *"--gpu"* ]] && ENV_FILE="environment-gpu.yml"
-
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
-conda env create -f $ENV_FILE
+conda env create -f environment.yml
 
 git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src
 

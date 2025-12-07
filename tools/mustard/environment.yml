@@ -17,6 +17,6 @@ dependencies:
   - pip:
       - Cython<3.0
       - grpcio==1.27.2
-      - tensorflow==1.15
+      - tensorflow-gpu==1.15
       - keras==2.3.1
 
