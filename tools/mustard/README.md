@@ -1,40 +1,102 @@
 # MuStARD
 
 ## Setup
-Installs MuStARD dependencies (Python 2.7, Perl modules, ViennaRNA, bedtools, R/ggplot2), clones source + pretrained models, and downloads chr14 genome + phyloP test data.
 
-Requires conda: https://docs.anaconda.com/miniconda/install/
+### Option 1: Local Conda Environment
+Installs MuStARD dependencies, clones source + pretrained models.
+
+Install conda: https://docs.anaconda.com/miniconda/install/
+
+Then run:
 
 ```bash
 ./setup.sh
 ```
 
-## Usage
-- Activate the environment:
+### Option 2: Docker
+Docker is required for ARM cpus since Python 2.7 is not available natively. 
+
+
+Install Docker Desktop: https://www.docker.com/products/docker-desktop/
+
+Ensure Docker is running before building image or running containers.
+
+Then run:
+
+```bash
+docker build -t mustard:latest .
+```
+
+## Download Test Data
+
+Download chr14 test data (genome, PhyloP conservation scores, and test loci):
+
+```bash
+./download_test_data.sh
+```
+
+## Run Inference
+
+### Option 1: Local Conda Environment
+
+Activate the environment:
 ```bash
 conda activate mustard
 ```
 
-Test on provided chr14 test data with the best miRNA model (MuStARD-mirSFC-U):
+Run inference on test data using the best model:
 ```bash
-./run_inference.sh --input data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed --genome data/chr14.fa --consDir data --output results --chromList chr14 --model MuStARD-mirSFC-U
+python inference.py \
+  --targetIntervals data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed \
+  --genome data/chr14.fa \
+  --consDir data \
+  --chromList chr14 \
+  --winSize 136
 ```
 
+**Note:** The conda environment uses `tensorflow-gpu==1.15`, which automatically uses GPU if available on Linux systems, or falls back to CPU if no GPU is detected.
 
-Parameters (MuStARD.pl predict):
-- `--input` (required): input BED file.
-- `--genome` (required): reference FASTA matching the BED coordinates.
-- `--output` (required): output directory.
-- `--model` (required): model name (e.g., MuStARD-mirSFC-U, MuStARD-mirSF).
-- `--inputMode` (auto-set): inferred from the model (sequence / RNAfold / conservation combos).
-- `--consDir` (required for models with C): directory with PhyloP conservation files.
-- `--chromList` (optional): comma-separated chromosomes to restrict processing (e.g., chr14).
-- `--threads` (optional, default 10): number of threads.
-- `--winSize` (optional, default 100): sliding window size.
-- `--step` (optional, default 5): step size.
-- `--staticPredFlag` (optional, default 0): 0 = sliding-window scanning (winSize/step). 1 = score each input interval as-is (no tiling).
-- `--modelType` (optional, default CNN): model type.
-- `--classNum` (optional, default 2): number of classes.
+### Option 2: Docker
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v $(pwd)/data:/work/data \
+  -v $(pwd)/results:/work/results \
+  mustard:latest \
+  --targetIntervals /work/data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed \
+  --genome /work/data/chr14.fa \
+  --consDir /work/data \
+  --chromList chr14 \
+  --dir /work/results \
+  --winSize 136
+```
+
+**Note for ARM users:** Docker uses emulation (`--platform linux/amd64`), which is slower but works correctly. Runs in CPU mode (no GPU support in Docker on macOS).
+
+## Parameters
+
+All parameters match MuStARD.pl predict interface:
+
+**required:**
+- `--targetIntervals`: BED formatted file with intervals for prediction.
+- `--genome`: Genome FASTA file.
+- `--consDir`: Directory with PhyloP conservation files. Use `"NaN"` for models without conservation (not needed for default model).
+
+**default:**
+- `--chromList` (default: `"all"`): List of chromosomes to scan (e.g., `"chr14"` or `"chr1,chr2"` or `"all"`).
+- `--dir` (default: `"results"`): Working directory for results.
+- `--model` (default: `"MuStARD-mirSFC-U"`): Model name or path to model file. Model names auto-resolve to full paths.
+- `--classNum` (default: `2`): Number of classes.
+- `--modelType` (default: `"CNN"`): Model type: CNN, CAE, or CVAE.
+
+**optional:**
+- `--modelDirName` (default: `"results"`): Name of model subdirectory for results.
+- `--intermDir` (default: `"same"`): Directory for pre-processed files (defaults to same as `--dir`).
+- `--winSize` (default: `100`): Window size in bp. Use `136` for max miRNA size.
+- `--step` (default: `5`): Step size in bp for sliding window.
+- `--staticPredFlag` (default: `0`): `0` = sliding-window scanning, `1` = static prediction (score intervals as-is).
+- `--inputMode` (default: `"sequence,RNAfold,conservation"`): Input mode: sequence, RNAfold, conservation (comma-separated). Default matches best model (MuStARD-mirSFC-U).
+- `--threads` (default: `10`): Number of threads for pre-processing.
 
 
 ## Models
