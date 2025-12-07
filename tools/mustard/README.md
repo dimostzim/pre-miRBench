@@ -50,8 +50,7 @@ python inference.py \
   --targetIntervals data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed \
   --genome data/chr14.fa \
   --consDir data \
-  --chromList chr14 \
-  --winSize 136
+  --chromList chr14
 ```
 
 **Note:** The conda environment uses `tensorflow-gpu==1.15`, which automatically uses GPU if available on Linux systems, or falls back to CPU if no GPU is detected.
@@ -67,32 +66,31 @@ docker run --rm --platform linux/amd64 \
   --genome /work/data/chr14.fa \
   --consDir /work/data \
   --chromList chr14 \
-  --dir /work/results \
-  --winSize 136
+  --dir /work/results
 ```
 
 **Note for ARM users:** Docker uses emulation (`--platform linux/amd64`), which is slower but works correctly. Runs in CPU mode (no GPU support in Docker on macOS).
 
 ## Parameters
 
-All parameters match MuStARD.pl predict interface:
+All parameters of MuStARD.pl predict interface:
 
 **required:**
 - `--targetIntervals`: BED formatted file with intervals for prediction.
 - `--genome`: Genome FASTA file.
-- `--consDir`: Directory with PhyloP conservation files. Use `"NaN"` for models without conservation (not needed for default model).
+- `--consDir`: Directory with PhyloP conservation files (for Conservation models).
 
 **default:**
 - `--chromList` (default: `"all"`): List of chromosomes to scan (e.g., `"chr14"` or `"chr1,chr2"` or `"all"`).
 - `--dir` (default: `"results"`): Working directory for results.
-- `--model` (default: `"MuStARD-mirSFC-U"`): Model name or path to model file. Model names auto-resolve to full paths.
+- `--model` (default: `"MuStARD-mirSFC-U"`): Model name.
 - `--classNum` (default: `2`): Number of classes.
 - `--modelType` (default: `"CNN"`): Model type: CNN, CAE, or CVAE.
 
 **optional:**
 - `--modelDirName` (default: `"results"`): Name of model subdirectory for results.
 - `--intermDir` (default: `"same"`): Directory for pre-processed files (defaults to same as `--dir`).
-- `--winSize` (default: `100`): Window size in bp. Use `136` for max miRNA size.
+- `--winSize` (default: `100`): Window size in bp.
 - `--step` (default: `5`): Step size in bp for sliding window.
 - `--staticPredFlag` (default: `0`): `0` = sliding-window scanning, `1` = static prediction (score intervals as-is).
 - `--inputMode` (default: `"sequence,RNAfold,conservation"`): Input mode: sequence, RNAfold, conservation (comma-separated). Default matches best model (MuStARD-mirSFC-U).
