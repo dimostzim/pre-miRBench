@@ -1,5 +1,7 @@
 # this is an old miniconda version with py2.7 support
-FROM continuumio/miniconda3:4.12.0 
+FROM continuumio/miniconda3:4.12.0
+
+ARG GPU=false
 
 WORKDIR /opt/mustard
 
@@ -7,14 +9,18 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends wget git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY environment.yml .
+COPY environment*.yml ./
 
-# normally miniconda supports mamba but this old version does not lol. so we install mamba for faster solving 
+# normally miniconda supports mamba but this old version does not lol. so we install mamba for faster solving
 # because building a linux image on ARM Mac and installing old packages is painfully slow.
-# then we crete env
+# then we create env
 
 RUN conda install -n base -c conda-forge mamba -y && \
-    mamba env create -f environment.yml && \
+    if [ "$GPU" = "true" ]; then \
+        mamba env create -f environment-gpu.yml; \
+    else \
+        mamba env create -f environment.yml; \
+    fi && \
     conda clean -afy
 ENV PATH="/opt/conda/envs/mustard/bin:${PATH}"
 ENV CONDA_DEFAULT_ENV=mustard
