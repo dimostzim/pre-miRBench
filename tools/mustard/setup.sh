@@ -4,7 +4,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if [ "$1" = "--docker" ]; then
     image_tag="${IMAGE_TAG:-mustard:latest}"
-    docker build -t "$image_tag" .
+    docker build --platform linux/amd64 -t "$image_tag" .
     exit 0
 fi
 
