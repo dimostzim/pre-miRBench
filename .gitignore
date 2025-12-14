@@ -6,3 +6,6 @@ tools/mustard/results/
 # miRe2e data and results
 tools/mire2e/data/
 tools/mire2e/results/
+
+# Unified inference results
+results/

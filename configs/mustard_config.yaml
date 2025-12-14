@@ -1,0 +1,19 @@
+# MuStARD Configuration
+
+# Required parameters
+targetIntervals: tools/mustard/data/test_loci/hsa.hairpin.slop5k.bothStrands.chr14.bed
+genome: tools/mustard/data/chr14.fa
+consDir: tools/mustard/data
+
+# Optional parameters (defaults shown)
+chromList: chr14           # default: all
+model: MuStARD-mirSFC-U    # default: MuStARD-mirSFC-U
+classNum: 2                # default: 2
+modelType: CNN             # default: CNN
+winSize: 100               # default: 100
+step: 5                    # default: 5
+staticPredFlag: 0          # default: 0
+inputMode: sequence,RNAfold,conservation  # default: sequence,RNAfold,conservation
+threads: 10                # default: 10
+modelDirName: results      # default: results
+intermDir: same            # default: same
