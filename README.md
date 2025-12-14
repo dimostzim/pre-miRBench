@@ -2,6 +2,11 @@
 
 Unified wrapper repository with consistent setup and inference interfaces for multiple prediction tools.
 
+## Available Tools
+
+- **mustard** - MuStARD (Multi-Scale Target RNA Detector)
+- **mire2e** - miRe2e (End-to-end Transformer model)
+
 ## Setup
 
 Install a tool using conda or Docker:
@@ -49,8 +54,3 @@ Results are saved to `results/{tool}/`.
 
 - **Conda mode**: miniconda/anaconda
 - **Docker mode**: Docker Desktop
-
-## Available Tools
-
-- **mustard** - MuStARD (Multi-Scale Target RNA Detector)
-- **mire2e** - miRe2e (End-to-end Transformer model)
