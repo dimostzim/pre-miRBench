@@ -35,7 +35,7 @@ Edit `configs/{tool}_config.yaml` to set parameters. Each config file shows requ
 ### Conda Mode
 
 ```bash
-python inference.py --tool {tool}
+python inference.py --tool {tool} --output-name my_run
 ```
 
 Automatically activates the conda environment.
@@ -43,12 +43,12 @@ Automatically activates the conda environment.
 ### Docker Mode
 
 ```bash
-python inference.py --tool {tool} --docker
+python inference.py --tool {tool} --docker --output-name my_run
 ```
 
 ### Results
 
-Results are saved to `results/{tool}/`.
+Results are saved to `results/{tool}/{output-name}/`.
 
 ## Requirements
 

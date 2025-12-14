@@ -9,6 +9,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e"])
     p.add_argument("--docker", action="store_true")
+    p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,7 +18,7 @@ def main():
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
-    output_dir = os.path.join(base_dir, "results", args.tool)
+    output_dir = os.path.join(base_dir, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
 
     if args.docker:
@@ -27,7 +28,7 @@ def main():
             f"{args.tool}:latest"
         ]
         path_prefix = "/work/"
-        output_path = f"/work/results/{args.tool}"
+        output_path = f"/work/results/{args.tool}/{args.output_name}"
     else:
         conda_base = subprocess.check_output(["conda", "info", "--base"], text=True).strip()
         conda_python = os.path.join(conda_base, "envs", args.tool, "bin", "python")
