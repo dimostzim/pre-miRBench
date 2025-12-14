@@ -21,8 +21,11 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     if args.docker:
+        uid = os.getuid()
+        gid = os.getgid()
         cmd = [
             "docker", "run", "--rm", "--platform", "linux/amd64",
+            "--user", f"{uid}:{gid}",
             "-v", f"{base_dir}:/work",
             f"{args.tool}:latest"
         ]
