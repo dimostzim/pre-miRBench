@@ -13,13 +13,19 @@ Prerequisites:
 - Conda (Miniconda/Anaconda): https://docs.anaconda.com/miniconda/install/
 - Docker (for `--docker` mode): https://www.docker.com/products/docker-desktop/ (ensure the daemon is running)
 
-Install a tool using conda or Docker:
+### Conda Setup
+
+Creates a conda env `{tool}` with dependencies and installs the tool.
 
 ```bash
-# Conda environment
 ./setup.sh --tool {tool}
+```
 
-# Docker image
+### Docker Setup
+
+Builds a Docker image `{tool}:latest` so you can run via `--docker` without installing dependencies on the host.
+
+```bash
 ./setup.sh --tool {tool} --docker
 ```
 
