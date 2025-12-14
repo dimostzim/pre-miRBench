@@ -53,8 +53,3 @@ python inference.py --tool {tool} --docker --output-name my_run
 ### Results
 
 Results are saved to `results/{tool}/{output-name}/`.
-
-## Requirements
-
-- **Conda mode**: miniconda/anaconda
-- **Docker mode**: Docker Desktop
