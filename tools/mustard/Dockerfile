@@ -1,6 +1,11 @@
 # this is an old miniconda version with py2.7 support
 FROM continuumio/miniconda3:4.12.0
 
+ARG http_proxy
+ARG https_proxy
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+
 WORKDIR /opt/mustard
 
 RUN apt-get update && \

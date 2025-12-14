@@ -1,0 +1,13 @@
+name: mire2e
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.9
+  - pytorch>=1.7
+  - pip
+  - pip:
+      - biopython>=1.78
+      - scikit-learn>=0.23
+      - tqdm
+      - miRe2e

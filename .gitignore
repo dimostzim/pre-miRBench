@@ -2,3 +2,7 @@
 tools/mustard/data/
 tools/mustard/mustard_src/
 tools/mustard/results/
+
+# miRe2e data and results
+tools/mire2e/data/
+tools/mire2e/results/
