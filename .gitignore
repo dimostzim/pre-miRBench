@@ -7,5 +7,17 @@ tools/mustard/results/
 tools/mire2e/data/
 tools/mire2e/results/
 
+# mirDNN data and cloned source
+tools/mirdnn/data/
+tools/mirdnn/mirdnn_src/
+tools/mirdnn/results/
+
 # Unified inference results
 results/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.DS_Store

@@ -12,6 +12,7 @@ Unified wrapper repository with consistent setup and inference interfaces for mu
 Prerequisites:
 - Conda (Miniconda/Anaconda): https://docs.anaconda.com/miniconda/install/
 - Docker (for `--docker` mode): https://www.docker.com/products/docker-desktop/ (ensure the daemon is running)
+- PyYAML: `pip install pyyaml` (required for unified interface)
 
 ### Conda Setup
 
