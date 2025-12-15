@@ -15,6 +15,7 @@ def main():
     p.add_argument("--length", type=int, default=100)
     p.add_argument("--step", type=int, default=20)
     p.add_argument("--batch_size", type=int, default=4096)
+    p.add_argument("--verbose", action="store_true", default=True, help="Print status on console")
     args = p.parse_args()
 
     if not os.path.isdir(args.output):
@@ -26,7 +27,7 @@ def main():
         length=args.length,
         step=args.step,
         batch_size=args.batch_size,
-        verbose=True
+        verbose=args.verbose
     )
 
     output_file = os.path.join(args.output, "predictions.json")

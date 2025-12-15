@@ -9,3 +9,4 @@ pretrained: hsa       # default: hsa
 length: 100           # default: 100
 step: 20              # default: 20
 batch_size: 4096      # default: 4096
+verbose: true         # default: true
