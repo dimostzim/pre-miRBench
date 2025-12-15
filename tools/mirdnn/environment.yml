@@ -1,0 +1,15 @@
+name: mirdnn
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - numpy
+  - pandas
+  - biopython
+  - scipy
+  - scikit-learn
+  - tqdm
+  - viennarna

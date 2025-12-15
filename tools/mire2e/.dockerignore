@@ -3,5 +3,8 @@ results/
 __pycache__/
 *.pyc
 *.pyo
-*.swp
-*.swo
+*.pyd
+.DS_Store
+.git/
+.gitignore
+README.md

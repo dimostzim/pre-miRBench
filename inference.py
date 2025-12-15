@@ -7,7 +7,7 @@ import yaml
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--tool", required=True, choices=["mustard", "mire2e"])
+    p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn"])
     p.add_argument("--docker", action="store_true")
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     args = p.parse_args()
@@ -62,6 +62,16 @@ def main():
         cmd.extend(["--pretrained", config["pretrained"]])
         cmd.extend(["--length", str(config["length"])])
         cmd.extend(["--step", str(config["step"])])
+        cmd.extend(["--batch_size", str(config["batch_size"])])
+        if config["verbose"]:
+            cmd.append("--verbose")
+
+    elif args.tool == "mirdnn":
+        cmd.extend(["--input", f"{path_prefix}{config['input']}"])
+        cmd.extend(["--output", output_path])
+        cmd.extend(["--model", config["model"]])
+        cmd.extend(["--seq_length", str(config["seq_length"])])
+        cmd.extend(["--device", config["device"]])
         cmd.extend(["--batch_size", str(config["batch_size"])])
 
     subprocess.check_call(cmd)
