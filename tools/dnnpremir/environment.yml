@@ -1,0 +1,14 @@
+name: dnnpremir
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.6
+  - numpy
+  - viennarna
+  - pip
+  - pip:
+      - tensorflow==1.14.0
+      - keras==2.2.4
+      - h5py==2.10.0

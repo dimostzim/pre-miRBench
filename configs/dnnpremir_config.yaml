@@ -1,0 +1,7 @@
+# dnnPreMiR Configuration
+
+# Required parameters
+input: tools/dnnpremir/data/test.fa
+
+# Optional parameters (defaults shown)
+seq_length: 180         # default: 180 (fixed, sequences are truncated/padded)
