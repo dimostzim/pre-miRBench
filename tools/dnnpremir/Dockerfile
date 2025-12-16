@@ -19,7 +19,6 @@ RUN conda env create -f environment.yml && \
 ENV PATH="/opt/conda/envs/dnnpremir/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/dnnpremir/lib:${LD_LIBRARY_PATH}"
 
-# Clone dnnPreMiR repository (includes pre-trained CNN model)
 RUN git clone https://github.com/zhengxueming/dnnPreMiR.git dnnpremir_src
 
 COPY inference.py ./
