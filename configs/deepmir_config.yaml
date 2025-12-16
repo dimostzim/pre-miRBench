@@ -1,0 +1,7 @@
+# DeepMir Configuration
+
+# Required parameters
+input: tools/deepmir/data/test.fa
+
+# Optional parameters (defaults shown)
+model: fine_tuned_cnn    # default: fine_tuned_cnn (best performing, options: fine_tuned_cnn, base_cnn)

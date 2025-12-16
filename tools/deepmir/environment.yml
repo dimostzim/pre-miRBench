@@ -1,0 +1,23 @@
+name: deepmir
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # TensorFlow 1.14 only has wheels up to Python 3.7
+  - python=3.7
+  - openjdk=8
+  - pip
+  - pip:
+      # TensorFlow 1.14 expects older numpy/h5py versions
+      - numpy==1.18.5
+      - h5py==2.10.0
+      - pyfaidx==0.5.7
+      - imageio==2.5.0
+      - xlrd
+      - keras==2.2.4
+      - tensorflow==1.14.0
+      # TensorFlow 1.14 is incompatible with protobuf >= 3.21
+      - protobuf<3.21
+      - scikit-learn==0.21.3
+      - matplotlib==3.0.3
+      - pandas==0.24.2

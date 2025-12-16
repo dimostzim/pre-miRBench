@@ -1,0 +1,12 @@
+data/
+deepmir_src/
+results/
+user_data/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.git/
+.gitignore
+README.md
