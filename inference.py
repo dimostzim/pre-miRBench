@@ -7,7 +7,7 @@ import yaml
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn"])
+    p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir"])
     p.add_argument("--docker", action="store_true")
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     args = p.parse_args()
@@ -73,6 +73,16 @@ def main():
         cmd.extend(["--seq_length", str(config["seq_length"])])
         cmd.extend(["--device", config["device"]])
         cmd.extend(["--batch_size", str(config["batch_size"])])
+
+    elif args.tool == "dnnpremir":
+        cmd.extend(["--input", f"{path_prefix}{config['input']}"])
+        cmd.extend(["--output", output_path])
+        cmd.extend(["--seq_length", str(config["seq_length"])])
+
+    elif args.tool == "deepmir":
+        cmd.extend(["--input", f"{path_prefix}{config['input']}"])
+        cmd.extend(["--output", output_path])
+        cmd.extend(["--model", config["model"]])
 
     subprocess.check_call(cmd)
 

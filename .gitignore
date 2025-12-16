@@ -1,18 +1,28 @@
-# MuStARD data and cloned source
+# MuStARD 
 tools/mustard/data/
 tools/mustard/mustard_src/
 tools/mustard/results/
 
-# miRe2e data and results
+# miRe2e 
 tools/mire2e/data/
 tools/mire2e/results/
 
-# mirDNN data and cloned source
+# mirDNN 
 tools/mirdnn/data/
 tools/mirdnn/mirdnn_src/
 tools/mirdnn/results/
 
-# Unified inference results
+#dnnpremir
+tools/dnnpremir/data/
+tools/dnnpremir/dnnpremir_src/
+tools/dnnpremir/results/
+
+#deepmir 
+tools/deepmir/data/
+tools/deepmir/deepmir_src/
+tools/deepmir/results/
+
+# unified inference results
 results/
 
 __pycache__/
