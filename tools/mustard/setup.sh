@@ -19,7 +19,9 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 conda env create -f environment.yml
 
-git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src
+if [ ! -d "mustard_src" ]; then
+    git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src
+fi
 
 mkdir -p data/models
 

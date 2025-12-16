@@ -18,3 +18,7 @@ fi
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 conda env create -f environment.yml
+
+if [ ! -d "mire2e_src" ]; then
+    git clone https://github.com/sinc-lab/miRe2e.git mire2e_src
+fi

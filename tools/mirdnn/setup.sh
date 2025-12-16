@@ -19,4 +19,6 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 conda env create -f environment.yml
 
-git clone --recurse-submodules https://github.com/cyones/mirDNN.git mirdnn_src
+if [ ! -d "mirdnn_src" ]; then
+    git clone --recurse-submodules https://github.com/cyones/mirDNN.git mirdnn_src
+fi

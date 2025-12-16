@@ -19,4 +19,6 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 conda env create -f environment.yml
 
-git clone https://github.com/zhengxueming/dnnPreMiR.git dnnpremir_src
+if [ ! -d "dnnpremir_src" ]; then
+    git clone https://github.com/zhengxueming/dnnPreMiR.git dnnpremir_src
+fi

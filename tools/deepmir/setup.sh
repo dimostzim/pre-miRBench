@@ -19,4 +19,6 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 conda env create -f environment.yml
 
-git clone https://github.com/jacordero/deepmir.git deepmir_src
+if [ ! -d "deepmir_src" ]; then
+    git clone https://github.com/jacordero/deepmir.git deepmir_src
+fi
