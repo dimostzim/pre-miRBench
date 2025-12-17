@@ -14,8 +14,8 @@ Then run:
 ```
 
 ### Option 2: Docker
-Docker is required for ARM cpus since Python 2.7 is not available natively. 
 
+**Note:** Docker is required for ARM cpus since Python 2.7 is not available natively.
 
 Install Docker Desktop: https://www.docker.com/products/docker-desktop/
 
@@ -66,8 +66,6 @@ docker run --rm --platform linux/amd64 \
   --chromList chr14 \
   --dir /work/results
 ```
-
-**Note for ARM users:** Docker uses emulation (`--platform linux/amd64`), which is slower but works correctly. Runs in CPU mode (no GPU support in Docker on macOS).
 
 ## Parameters
 

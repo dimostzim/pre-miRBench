@@ -35,6 +35,8 @@ Builds a Docker image `{tool}:latest` so you can run via `--docker` without inst
 ./setup.sh --tool {tool} --docker
 ```
 
+**Note for ARM users (macOS):** Docker uses emulation (`--platform linux/amd64`), which is slower but works correctly. All tools run in CPU mode (no GPU support in Docker on macOS).
+
 Download test data:
 
 ```bash

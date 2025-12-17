@@ -51,6 +51,22 @@ docker run --rm --platform linux/amd64 \
 
 ## Parameters
 
-- `--input` (required): Input FASTA file.
-- `--output` (default: `results`): Directory to store `predictions.txt`.
-- `--model` (optional): Custom `.hdf5` weight file to stage as `model/new_test.hdf5` for inference.
+**required:**
+- `--input`: Input FASTA file.
+
+**default:**
+- `--output` (default: `"results"`): Output directory.
+- `--model` (optional): Custom `.hdf5` weight file to use instead of bundled model.
+
+## Model
+
+| Model | Type | Backend | Location |
+|-------|------|---------|----------|
+| new_test.hdf5 | LSTM RNN | Theano | Bundled in deepmirgene_src/inference/model/ |
+
+The bundled model is automatically used unless a custom model is specified via `--model`.
+
+## Output
+
+The tool generates:
+- `predictions.txt`: Predictions with sequence IDs and classification results

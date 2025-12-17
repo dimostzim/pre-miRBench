@@ -48,7 +48,7 @@ python inference.py \
   --model animal
 ```
 
-**Note:** The wrapper automatically runs RNAfold to generate secondary structure before prediction.
+**Note:** By default uses CPU. For GPU, add `--device cuda:0`.
 
 ### Option 2: Docker
 

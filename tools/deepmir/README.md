@@ -5,9 +5,7 @@
 ### Option 1: Local Conda Environment
 Installs DeepMir dependencies and clones source repository.
 
-**Prerequisites:**
-- Conda: https://docs.anaconda.com/miniconda/install/
-- Java JRE (for hairpin image generation)
+Install conda: https://docs.anaconda.com/miniconda/install/
 
 Then run:
 
@@ -26,8 +24,6 @@ Then run:
 ```bash
 docker build -t deepmir:latest .
 ```
-
-**Note:** Docker image includes Java JRE for hairpin image generation.
 
 ## Download Test Data
 
@@ -51,8 +47,6 @@ python inference.py \
   --output results \
   --model fine_tuned_cnn
 ```
-
-**Note:** Requires Java JRE installed on the system for hairpin image generation.
 
 ### Option 2: Docker
 
@@ -98,5 +92,3 @@ The tool generates:
 - `images/`: Directory with hairpin structure images (.png files)
 - `images.npz`: Numpy array of image data
 - `names.npz`: Numpy array of sequence names
-
-**Note:** The original DeepMir creates output in `user_data/{filename}/`. This wrapper copies all results to the specified output directory for consistency with other tools.

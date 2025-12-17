@@ -80,6 +80,14 @@ docker run --rm --platform linux/amd64 \
 | hsa | H. sapiens |
 | animals | Animals (excluding H. sapiens) |
 
+## Output
+
+The tool generates:
+- `predictions.json`: JSON file with predictions containing:
+  - `window`: Window index from sliding window scan
+  - `score_5_3`: Prediction score for 5'→3' direction
+  - `score_3_5`: Prediction score for 3'→5' direction
+
 ## Data
 
 Test data is available in the GitHub repository:

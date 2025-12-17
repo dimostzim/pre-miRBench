@@ -47,8 +47,6 @@ python inference.py \
   --output results
 ```
 
-**Note:** The wrapper automatically handles running RNAfold for secondary structure prediction.
-
 ### Option 2: Docker
 
 ```bash
