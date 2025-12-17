@@ -68,8 +68,6 @@ def main():
         cmd.extend(["--length", str(config["length"])])
         cmd.extend(["--step", str(config["step"])])
         cmd.extend(["--batch_size", str(config["batch_size"])])
-        if config["verbose"]:
-            cmd.append("--verbose")
 
     elif args.tool == "mirdnn":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
