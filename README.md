@@ -5,12 +5,12 @@ Unified wrapper repository with consistent setup and inference interfaces for mu
 
 ## Available Tools
 
-- **mustard** - MuStARD (Multi-Scale Target RNA Detector)
-- **mire2e** - miRe2e (End-to-end Transformer model)
-- **mirdnn** - mirDNN (Hybrid CNN/RNN with structure)
-- **dnnpremir** - dnnPreMiR (CNN-based classifier)
-- **deepmir** - DeepMir (CNN-based predictor)
-- **deepmirgene** - deepMiRGene (RNN with attention for pre-miRNA)
+- **mustard** - Multi-scale CNN with structure and conservation
+- **mire2e** - End-to-end Transformer
+- **mirdnn** - Hybrid CNN/RNN with structure
+- **dnnpremir** - CNN with structure
+- **deepmir** - Image-based CNN with structure
+- **deepmirgene** - RNN with attention and structure
 
 ## Setup
 
