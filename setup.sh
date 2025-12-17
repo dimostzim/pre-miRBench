@@ -23,7 +23,6 @@ done
 
 if [ -z "$TOOL" ]; then
     echo "Error: --tool is required"
-    echo "Usage: ./setup.sh --tool <tool_name> [--docker]"
     exit 1
 fi
 
