@@ -18,8 +18,6 @@ docker build -t deepmirgene:latest .
 
 ## Download Test Data
 
-Grab the example FASTA file used in the original repository:
-
 ```bash
 ./download_test_data.sh
 ```

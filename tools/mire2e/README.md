@@ -27,8 +27,6 @@ docker build -t mire2e:latest .
 
 ## Download Test Data
 
-Download example FASTA sequences:
-
 ```bash
 ./download_test_data.sh
 ```

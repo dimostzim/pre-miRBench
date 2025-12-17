@@ -27,8 +27,6 @@ docker build -t mirdnn:latest .
 
 ## Download Test Data
 
-Prepare test FASTA sequences from mirDNN repository:
-
 ```bash
 ./download_test_data.sh
 ```

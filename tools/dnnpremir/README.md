@@ -27,8 +27,6 @@ docker build -t dnnpremir:latest .
 
 ## Download Test Data
 
-Prepare test FASTA sequences from dnnPreMiR repository:
-
 ```bash
 ./download_test_data.sh
 ```

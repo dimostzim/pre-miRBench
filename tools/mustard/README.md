@@ -29,8 +29,6 @@ docker build -t mustard:latest .
 
 ## Download Test Data
 
-Download chr14 test data (genome, PhyloP conservation scores, and test loci):
-
 ```bash
 ./download_test_data.sh
 ```

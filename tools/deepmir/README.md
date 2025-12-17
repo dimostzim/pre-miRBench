@@ -31,8 +31,6 @@ docker build -t deepmir:latest .
 
 ## Download Test Data
 
-Prepare test FASTA sequences from DeepMir repository:
-
 ```bash
 ./download_test_data.sh
 ```
