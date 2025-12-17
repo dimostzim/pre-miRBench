@@ -76,7 +76,7 @@ docker run --rm --platform linux/amd64 \
 | **fine_tuned_cnn** (default) | VGG-based CNN | Fine-tuned | **Best performance** |
 | base_cnn | VGG-based CNN | Base training | Good |
 
-The **fine_tuned_cnn** model is recommended as it uses a fine-tuning procedure during training and achieves the best performance according to the paper.
+The **fine_tuned_cnn** model is recommended.
 
 ## Method
 
