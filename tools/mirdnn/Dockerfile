@@ -13,7 +13,8 @@ RUN apt-get update && \
 
 COPY environment.yml .
 
-RUN conda env create -f environment.yml && \
+RUN conda install -n base -c conda-forge mamba -y && \
+    mamba env create -f environment.yml && \
     conda clean -afy
 
 ENV PATH="/opt/conda/envs/mirdnn/bin:${PATH}"

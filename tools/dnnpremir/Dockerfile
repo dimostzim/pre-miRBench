@@ -13,11 +13,12 @@ RUN apt-get update && \
 
 COPY environment.yml .
 
-RUN conda env create -f environment.yml && \
+RUN conda install -n base -c conda-forge mamba -y && \
+    mamba env create -f environment.yml && \
     conda clean -afy
 
 ENV PATH="/opt/conda/envs/dnnpremir/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/conda/envs/dnnpremir/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/conda/envs/dnnpremir/lib"
 
 RUN git clone https://github.com/zhengxueming/dnnPreMiR.git dnnpremir_src
 
