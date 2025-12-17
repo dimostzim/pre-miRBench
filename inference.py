@@ -3,11 +3,12 @@ import argparse
 import os
 import subprocess
 import yaml
+import shutil
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir"])
+    p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
     p.add_argument("--docker", action="store_true")
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     args = p.parse_args()
@@ -30,7 +31,11 @@ def main():
         path_prefix = "/work/"
         output_path = f"/work/results/{args.tool}/{args.output_name}"
     else:
-        conda_base = subprocess.check_output(["conda", "info", "--base"], text=True).strip()
+        conda_exe = shutil.which("conda")
+        if conda_exe:
+            conda_base = os.path.dirname(os.path.dirname(conda_exe))
+        else:
+            conda_base = os.path.expanduser("~/miniconda3")
         conda_python = os.path.join(conda_base, "envs", args.tool, "bin", "python")
         tool_script = os.path.join(base_dir, "tools", args.tool, "inference.py")
         cmd = [conda_python, tool_script]
@@ -83,6 +88,12 @@ def main():
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
         cmd.extend(["--model", config["model"]])
+
+    elif args.tool == "deepmirgene":
+        cmd.extend(["--input", f"{path_prefix}{config['input']}"])
+        cmd.extend(["--output", output_path])
+        if config.get("model"):
+            cmd.extend(["--model", f"{path_prefix}{config['model']}"])
 
     subprocess.check_call(cmd)
 

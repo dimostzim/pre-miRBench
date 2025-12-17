@@ -22,6 +22,11 @@ tools/deepmir/data/
 tools/deepmir/deepmir_src/
 tools/deepmir/results/
 
+#deepmirgene
+tools/deepmirgene/data/
+tools/deepmirgene/deepmirgene_src/
+tools/deepmirgene/results/
+
 # unified inference results
 results/
 
