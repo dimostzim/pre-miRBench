@@ -47,7 +47,6 @@ def main():
 
     env = os.environ.copy()
     env.setdefault("KERAS_BACKEND", "theano")
-    env.setdefault("THEANO_FLAGS", "optimizer=None")
 
     try:
         subprocess.check_call(cmd, cwd=inference_dir, env=env)
