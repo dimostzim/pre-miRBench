@@ -1,0 +1,7 @@
+# deepMiRGene Configuration
+
+# Required parameters
+input: tools/deepmirgene/data/examples.fa
+
+# Optional parameters (defaults shown)
+model: null            # default: use bundled model (in deepmirgene_src/inference/model/new_test.hdf5)

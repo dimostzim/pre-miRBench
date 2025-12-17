@@ -1,0 +1,21 @@
+name: deepmirgene
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.7
+  - numpy=1.16.6
+  - biopython
+  - scikit-learn
+  - hdf5
+  - make
+  - perl
+  - pkg-config
+  - compilers
+  - mkl
+  - mkl-service
+  - theano=1.0.5
+  - pip
+  - pip:
+      - keras==2.2.4
+      - h5py==2.10.0
