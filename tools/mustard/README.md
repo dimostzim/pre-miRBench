@@ -107,6 +107,12 @@ All parameters of MuStARD.pl predict interface:
 
 S=Sequence, F=RNAfold, C=Conservation
 
+## Output
+
+The tool generates:
+- Prediction scores for sliding windows across genomic regions
+- Aggregated peaks identifying high-confidence pre-miRNA candidates
+- R plots visualizing prediction results
 
 ## Data
 Full genome:
