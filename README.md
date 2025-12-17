@@ -1,6 +1,7 @@
-# Pre-miRNA Prediction Tools
+# Benchmarking of Pre-miRNA Prediction Tools
 
-Unified wrapper repository with consistent setup and inference interfaces for multiple prediction tools.
+
+Unified wrapper repository with consistent setup and inference interfaces for multiple pre-mirna prediction tools.
 
 ## Available Tools
 
