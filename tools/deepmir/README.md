@@ -78,13 +78,6 @@ docker run --rm --platform linux/amd64 \
 
 The **fine_tuned_cnn** model is recommended.
 
-## Method
-
-DeepMir uses a unique approach:
-1. **Hairpin Image Generation**: Converts RNA sequences to 2D images using a Java-based hairpin structure visualizer
-2. **Image Processing**: Processes hairpin images (25×100 pixels, RGB)
-3. **CNN Classification**: Uses VGG-based CNN to classify images as pre-miRNA or not
-
 ## Output
 
 The tool generates:
