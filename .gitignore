@@ -30,6 +30,10 @@ tools/deepmirgene/results/
 # unified inference results
 results/
 
+# folding
+folding/data
+folding/folding_output
+
 __pycache__/
 *.pyc
 *.pyo

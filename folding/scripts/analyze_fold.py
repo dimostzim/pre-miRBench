@@ -42,8 +42,9 @@ std = energies.std(ddof=1)
 bandwidth = 1.06 * std * (n ** (-0.2))
 
 mean = energies.mean()
-q25 = np.percentile(energies, 25)
-q75 = np.percentile(energies, 75)
+sd = energies.std(ddof=1)
+mean_minus_sd = mean - sd
+mean_plus_sd = mean + sd
 
 x_min = energies.min()
 x_max = energies.max()
@@ -57,17 +58,17 @@ ys /= (n * bandwidth * math.sqrt(2.0 * math.pi))
 
 plt.figure(figsize=(8, 5))
 plt.plot(xs, ys, color="tab:blue", linewidth=2)
-plt.axvline(q25, color="gray", linestyle="--", linewidth=1, label=f"Q25: {q25:.1f}")
+plt.axvline(mean_minus_sd, color="gray", linestyle="--", linewidth=1, label=f"Mean-SD: {mean_minus_sd:.1f}")
 plt.axvline(mean, color="red", linestyle="-", linewidth=1.5, label=f"Mean: {mean:.1f}")
-plt.axvline(q75, color="gray", linestyle="--", linewidth=1, label=f"Q75: {q75:.1f}")
+plt.axvline(mean_plus_sd, color="gray", linestyle="--", linewidth=1, label=f"Mean+SD: {mean_plus_sd:.1f}")
 plt.xlabel("Minimum free energy (kcal/mol)")
 plt.ylabel("Density")
-plt.legend()
+plt.legend(loc='upper left')
 plt.grid(alpha=0.2)
 plt.tight_layout()
 plt.savefig(args.plot, dpi=150)
 
 print(f"{len(data)} windows")
-print(f"Mean: {mean:.2f} | Q25: {q25:.2f} | Q75: {q75:.2f}")
+print(f"Mean: {mean:.2f} | SD: {sd:.2f} | Range: [{mean_minus_sd:.2f}, {mean_plus_sd:.2f}]")
 print(f"CSV: {args.csv}")
 print(f"Plot: {args.plot}")

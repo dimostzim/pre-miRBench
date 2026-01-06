@@ -27,7 +27,7 @@ Downloads UCSC `ce11` to `data/ce11.fa`.
 ```bash
 python run_folding.py \
   --input genome.fa \
-  --output results/ \
+  --output folding_output/ \
   --window 100 \
   --step 5 \
   --cpus 16
