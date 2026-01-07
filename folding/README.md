@@ -4,9 +4,9 @@ Runs RNAfold on sliding windows across sequences and generates MFE distribution 
 
 ## Requirements
 
-- ViennaRNA (`RNAfold` on PATH)
+- ViennaRNA
 - bedtools
-- Python packages: `numpy`, `matplotlib`
+- Python packages: `numpy`, `matplotlib`, `scikit-learn`
 
 ## Setup
 
@@ -15,13 +15,15 @@ conda env create -f environment.yml
 conda activate folding
 ```
 
-## Download C. elegans Genome
+## Download Data
 
 ```bash
-./download_c_elegans_genome.sh
+./download_data.sh
 ```
 
-Downloads UCSC `ce11` to `data/ce11.fa`.
+Downloads and prepares:
+- `data/ce11.fa` - C. elegans genome (98 MB)
+- `data/cel-precursors-no-v2.bed` - 138 precursor coordinates (filtered from MirGeneDB)
 
 ## Usage
 
