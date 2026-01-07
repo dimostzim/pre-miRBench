@@ -34,6 +34,9 @@ results/
 folding/data
 folding/folding_output
 
+#orthologues
+premirna_orthologues/results/
+
 __pycache__/
 *.pyc
 *.pyo
