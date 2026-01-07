@@ -1,0 +1,11 @@
+name: mirna-orthologues
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - requests
+  - beautifulsoup4
+  - tqdm
+  - biopython
