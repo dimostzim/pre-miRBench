@@ -9,3 +9,4 @@ dependencies:
   - matplotlib
   - viennarna
   - bedtools
+  - scikit-learn

@@ -98,3 +98,31 @@ python scripts/sample_negatives.py \
 - `negatives.csv`: Sampled negative windows with matched MFE distribution
 - `balanced_dataset.csv`: Combined dataset with 'label' column (positive/negative)
 - `mfe_comparison.png`: KDE plot comparing positive vs negative distributions
+
+## Train Random Forest Classifier
+
+Train random forest model on balanced dataset (90-10 train-test split).
+
+```bash
+python scripts/train_rf.py \
+  --input folding_output/balanced_dataset.csv \
+  --model folding_output/rf_model.pkl \
+  --report folding_output/rf_report.txt
+```
+
+**Parameters:**
+- `--input`: Balanced dataset CSV
+- `--model`: Output pickle file for trained model
+- `--report`: Output text report
+- `--test_size`: Test split ratio (default: 0.1)
+- `--n_trees`: Number of trees (default: 100)
+- `--random_state`: Random seed (default: 42)
+
+**Features (7 total):**
+- Sequence: A%, U%, G%, C%
+- Structure: paired%, unpaired%
+- Energy: mfe
+
+**Outputs:**
+- `rf_model.pkl`: Trained random forest model
+- `rf_report.txt`: Performance metrics (accuracy, precision, recall, f1, auroc, auprc), confusion matrix, feature importances
