@@ -33,6 +33,7 @@ results/
 # folding
 folding/data
 folding/folding_output
+folding/output/
 
 #orthologues
 premirna_orthologues/results/

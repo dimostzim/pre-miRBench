@@ -1,12 +1,12 @@
 # RNA Folding Pipeline
 
-Runs RNAfold on sliding windows across sequences and generates MFE distribution plot.
+Runs RNAfold on sliding windows (default: 200bp, step 50bp) across sequences and generates MFE distribution plot.
 
 ## Requirements
 
 - ViennaRNA
 - bedtools
-- Python packages: `numpy`, `matplotlib`, `scikit-learn`
+- Python packages: `numpy`, `matplotlib`, `scikit-learn`, `scipy`
 
 ## Setup
 
@@ -22,33 +22,42 @@ conda activate folding
 ```
 
 Downloads and prepares:
-- `data/ce11.fa` - C. elegans genome (98 MB)
+- `data/ce11.fa` - C. elegans genome
+- `data/ce11.masked.fa` - Repeat-masked genome (repeats replaced with N)
+- `data/ce11.gtf` - Gene annotation from Ensembl (for genomic region filtering)
 - `data/cel-precursors-no-v2.bed` - 138 precursor coordinates (filtered from MirGeneDB)
 
 ## Usage
 
 ```bash
 python run_folding.py \
-  --input genome.fa \
+  --input data/ce11.masked.fa \
   --output folding_output/ \
-  --window 100 \
-  --step 5 \
   --cpus 16
 ```
 
 **Parameters:**
-- `--input`: Input FASTA file
+- `--input`: Input FASTA file (use repeat-masked for filtering)
 - `--output`: Output directory
 - `--window`: Window size (default: 200)
 - `--step`: Step size (default: 50)
-- `--cpus`: Number of CPUs for parallel folding (default: None)
+- `--chr`: Comma-separated list of chromosomes to process (default: all)
+- `--cpus`: Number of CPUs for parallel folding (default: 8)
 - `--dna`: Keep DNA bases (default: converts T→U)
+- `--both_strands`: Generate windows for both strands (default: on)
+- `--single_strand`: Only process forward strand
+- `--max_repeat_frac`: Skip windows with repeat fraction above threshold (default: 0.1 = skip >10% repeats)
 
 **Outputs:**
 - `windows.fa`: Sliding windows FASTA
 - `windows.fold`: RNAfold output (sequence + structure + MFE)
-- `results.csv`: Window data (window_id, sequence, structure, mfe)
+- `results.csv`: Window data (window_id, chrom, start, end, strand, sequence, structure, mfe)
 - `mfe_kde.png`: KDE plot with mean and mean±SD lines
+
+**Example (single chromosome, using defaults):**
+```bash
+python run_folding.py --input data/ce11.masked.fa --output output/ --chr chrI
+```
 
 ## Find miRNA-Containing Windows
 
@@ -77,15 +86,10 @@ python scripts/find_mirna_windows.py \
 
 ## Sample Balanced Negatives
 
-Sample negative windows matching MFE distribution of positives (1:1 ratio).
+Sample negative windows matching MFE, dinucleotide, and structure distributions of positives (1:1 ratio) using nearest-neighbor matching.
 
 ```bash
-python scripts/sample_negatives.py \
-  --positives folding_output/mirna_windows.csv \
-  --all_windows folding_output/results.csv \
-  --negatives folding_output/negatives.csv \
-  --balanced folding_output/balanced_dataset.csv \
-  --plot folding_output/mfe_comparison.png
+python scripts/sample_negatives.py --positives output/positives.csv --all_windows output/results.csv --negatives output/negatives.csv --balanced output/balanced.csv --plot_dir output/plots/
 ```
 
 **Parameters:**
@@ -93,13 +97,33 @@ python scripts/sample_negatives.py \
 - `--all_windows`: CSV with all genome-wide windows
 - `--negatives`: Output CSV for sampled negatives
 - `--balanced`: Output CSV with combined positives + negatives
-- `--plot`: MFE comparison plot
-- `--bins`: Number of MFE bins for stratified sampling (default: 50)
+- `--plot_dir`: Directory for comparison plots
+- `--match_strand`: Match strand distribution (default: on)
+- `--no_match_strand`: Disable strand matching
+- `--match_chr`: Match chromosome distribution (default: on)
+- `--no_match_chr`: Disable chromosome matching
+- `--seed`: Random seed (default: 42)
+
+**Matching features (22 total):**
+- MFE (1)
+- Dinucleotide frequencies (16): AA, AC, AG, AU, CA, CC, CG, CU, GA, GC, GG, GU, UA, UC, UG, UU
+- Structure features (4): stem_length, loop_size, bulge_count, paired_fraction
+- Sequence complexity (1): Shannon entropy (0=low complexity, 2=high complexity)
+
+**Bias controls:**
+- **Compositional matching**: Z-score normalized nearest-neighbor on all 22 features
+- **Strand matching** (`--match_strand`): Sample negatives with same strand distribution as positives
+- **Chromosome matching** (`--match_chr`): Sample negatives with same chromosome distribution as positives
 
 **Outputs:**
-- `negatives.csv`: Sampled negative windows with matched MFE distribution
+- `negatives.csv`: Sampled negative windows
 - `balanced_dataset.csv`: Combined dataset with 'label' column (positive/negative)
-- `mfe_comparison.png`: KDE plot comparing positive vs negative distributions
+- `plots/mfe_comparison.png`: KDE plot comparing MFE distributions
+- `plots/dinucleotide_comparison.png`: Bar chart comparing mean dinucleotide frequencies
+- `plots/dinucleotide_kde_grid.png`: 4x4 grid of KDE plots for each dinucleotide
+- `plots/structure_comparison.png`: 2x3 grid of structure feature distributions
+- `plots/strand_comparison.png`: Bar chart of strand distribution (if --match_strand)
+- `plots/chr_comparison.png`: Bar chart of chromosome distribution (if --match_chr)
 
 ## Train Random Forest Classifier
 
@@ -120,10 +144,8 @@ python scripts/train_rf.py \
 - `--n_trees`: Number of trees (default: 100)
 - `--random_state`: Random seed (default: 42)
 
-**Features (7 total):**
-- Sequence: A%, U%, G%, C%
-- Structure: paired%, unpaired%
-- Energy: mfe
+**Features (16 total):**
+- Dinucleotide frequencies: AA, AC, AG, AU, CA, CC, CG, CU, GA, GC, GG, GU, UA, UC, UG, UU
 
 **Outputs:**
 - `rf_model.pkl`: Trained random forest model

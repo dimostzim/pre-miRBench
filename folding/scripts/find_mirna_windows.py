@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 
 def parse_window_id(window_id):
     # convert 1-based fully-closed to 0-based half-open
-    chr_part, coord_part = window_id.split('|')
+    # Format: chr|start-end|strand (or chr|start-end for backward compatibility)
+    parts = window_id.split('|')
+    chr_part = parts[0]
+    coord_part = parts[1]
     start, end = coord_part.split('-')
     return chr_part, int(start) - 1, int(end)
 

@@ -5,6 +5,23 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def parse_window_id(window_id):
+    """Parse window_id to extract chr, start, end, strand.
+
+    Supports formats:
+        chr|start-end|strand  (new format)
+        chr|start-end         (old format, assumes +)
+    """
+    parts = window_id.split('|')
+    chrom = parts[0]
+    coords = parts[1].split('-')
+    start = int(coords[0])
+    end = int(coords[1])
+    strand = parts[2] if len(parts) > 2 else '+'
+    return chrom, start, end, strand
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", required=True)
 parser.add_argument("--csv", required=True)
@@ -28,12 +45,15 @@ with open(args.input) as f:
         mfe = float(struct[left + 1:right].strip())
         structure = struct[:left].strip()
 
-        data.append([window_id, seq, structure, mfe])
+        # Parse window_id components
+        chrom, start, end, strand = parse_window_id(window_id)
+
+        data.append([window_id, chrom, start, end, strand, seq, structure, mfe])
         energies.append(mfe)
 
 with open(args.csv, "w", newline="") as f:
     writer = csv.writer(f)
-    writer.writerow(["window_id", "sequence", "structure", "mfe"])
+    writer.writerow(["window_id", "chrom", "start", "end", "strand", "sequence", "structure", "mfe"])
     writer.writerows(data)
 
 energies = np.array(energies)
