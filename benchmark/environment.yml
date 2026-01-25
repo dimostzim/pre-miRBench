@@ -1,4 +1,4 @@
-name: folding
+name: benchmark
 channels:
   - conda-forge
   - bioconda

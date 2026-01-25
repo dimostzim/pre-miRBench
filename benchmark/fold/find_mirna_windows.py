@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 
 
 def parse_window_id(window_id):
-    # convert 1-based fully-closed to 0-based half-open
-    # Format: chr|start-end|strand (or chr|start-end for backward compatibility)
     parts = window_id.split('|')
     chr_part = parts[0]
     coord_part = parts[1]
@@ -111,7 +109,6 @@ with open(args.summary, 'w') as f:
     f.write(f"min: {min(counts)}\n")
     f.write(f"max: {max(counts)}\n")
 
-# kde plot of mfe distribution
 energies = np.array([float(row['mfe']) for row in output_rows])
 n = len(energies)
 std = energies.std(ddof=1)

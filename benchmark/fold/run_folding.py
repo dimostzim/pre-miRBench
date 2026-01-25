@@ -3,9 +3,12 @@ import argparse
 import os
 import subprocess
 
+BENCHMARK_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUTPUT_DIR = os.path.join(BENCHMARK_DIR, "output")
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", required=True)
-parser.add_argument("--output", required=True)
+parser.add_argument("--output", default=os.path.join(OUTPUT_DIR, "fold_output"))
 parser.add_argument("--window", type=int, default=200)
 parser.add_argument("--step", type=int, default=50)
 parser.add_argument("--chr", dest="chromosomes", default=None,
@@ -20,7 +23,7 @@ args = parser.parse_args()
 
 os.makedirs(args.output, exist_ok=True)
 
-cmd = ["python", "scripts/make_windows.py", "--input", args.input, "--window", str(args.window), "--step", str(args.step), "--output", f"{args.output}/windows.fa"]
+cmd = ["python", os.path.join(os.path.dirname(__file__), "make_windows.py"), "--input", args.input, "--window", str(args.window), "--step", str(args.step), "--output", f"{args.output}/windows.fa"]
 if args.chromosomes:
     cmd += ["--chr", args.chromosomes]
 if args.dna:
@@ -30,9 +33,9 @@ if args.both_strands and not args.single_strand:
 cmd += ["--max_repeat_frac", str(args.max_repeat_frac)]
 subprocess.check_call(cmd)
 
-cmd = ["python", "scripts/run_fold.py", "--input", f"{args.output}/windows.fa", "--output", f"{args.output}/windows.fold"]
+cmd = ["python", os.path.join(os.path.dirname(__file__), "run_fold.py"), "--input", f"{args.output}/windows.fa", "--output", f"{args.output}/windows.fold"]
 if args.cpus:
     cmd += ["--cpus", str(args.cpus)]
 subprocess.check_call(cmd)
 
-subprocess.check_call(["python", "scripts/analyze_fold.py", "--input", f"{args.output}/windows.fold", "--csv", f"{args.output}/results.csv", "--plot", f"{args.output}/mfe_kde.png"])
+subprocess.check_call(["python", os.path.join(os.path.dirname(__file__), "analyze_fold.py"), "--input", f"{args.output}/windows.fold", "--csv", f"{args.output}/results.csv", "--plot", f"{args.output}/mfe_kde.png"])

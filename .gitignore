@@ -30,10 +30,9 @@ tools/deepmirgene/results/
 # unified inference results
 results/
 
-# folding
-folding/data
-folding/folding_output
-folding/output/
+# benchmark
+benchmark/output/
+benchmark/download/data/
 
 #orthologues
 premirna_orthologues/results/

@@ -32,10 +32,7 @@ def main():
         output_path = f"/work/results/{args.tool}/{args.output_name}"
     else:
         conda_exe = shutil.which("conda")
-        if conda_exe:
-            conda_base = os.path.dirname(os.path.dirname(conda_exe))
-        else:
-            conda_base = os.path.expanduser("~/miniconda3")
+        conda_base = os.path.dirname(os.path.dirname(conda_exe))
         conda_python = os.path.join(conda_base, "envs", args.tool, "bin", "python")
         tool_script = os.path.join(base_dir, "tools", args.tool, "inference.py")
         cmd = [conda_python, tool_script]
@@ -57,8 +54,7 @@ def main():
         cmd.extend(["--inputMode", config["inputMode"]])
         cmd.extend(["--threads", str(config["threads"])])
         cmd.extend(["--modelDirName", config["modelDirName"]])
-        if config["intermDir"] != "same":
-            cmd.extend(["--intermDir", f"{path_prefix}{config['intermDir']}"])
+        cmd.extend(["--intermDir", f"{path_prefix}{config['intermDir']}"])
 
     elif args.tool == "mire2e":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
@@ -90,8 +86,7 @@ def main():
     elif args.tool == "deepmirgene":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
-        if config.get("model"):
-            cmd.extend(["--model", f"{path_prefix}{config['model']}"])
+        cmd.extend(["--model", f"{path_prefix}{config['model']}"])
 
     subprocess.check_call(cmd)
 

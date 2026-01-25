@@ -7,12 +7,6 @@ import matplotlib.pyplot as plt
 
 
 def parse_window_id(window_id):
-    """Parse window_id to extract chr, start, end, strand.
-
-    Supports formats:
-        chr|start-end|strand  (new format)
-        chr|start-end         (old format, assumes +)
-    """
     parts = window_id.split('|')
     chrom = parts[0]
     coords = parts[1].split('-')
@@ -45,7 +39,6 @@ with open(args.input) as f:
         mfe = float(struct[left + 1:right].strip())
         structure = struct[:left].strip()
 
-        # Parse window_id components
         chrom, start, end, strand = parse_window_id(window_id)
 
         data.append([window_id, chrom, start, end, strand, seq, structure, mfe])

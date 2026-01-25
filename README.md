@@ -1,69 +1,19 @@
-# Benchmarking of Pre-miRNA Prediction Tools
+# Pre-miRNA Prediction Pipeline
 
+Pipeline for pre-miRNA prediction: data preparation, RNA folding analysis, balanced dataset creation, and model training.
 
-Unified wrapper repository with consistent setup and inference interfaces for multiple pre-mirna prediction tools.
+## Structure
 
-## Available Tools
+- `benchmark/` - Benchmarking pipeline
+  - `download/` - Data download scripts
+  - `fold/` - RNA folding pipeline
+  - `sample_negatives/` - Balanced negative sampling
+  - `models/` - Model training scripts
+- `tools/` - Pre-miRNA prediction tool wrappers
+- `configs/` - Tool configuration files
 
-- **mustard** - Multi-scale CNN with structure and conservation
-- **mire2e** - End-to-end Transformer
-- **mirdnn** - Hybrid CNN/RNN with structure
-- **dnnpremir** - CNN with structure
-- **deepmir** - Image-based CNN with structure
-- **deepmirgene** - RNN with attention and structure
+## Documentation
 
-## Setup
-
-Prerequisites:
-- Conda (Miniconda/Anaconda): https://docs.anaconda.com/miniconda/install/
-- Docker (for `--docker` mode): https://www.docker.com/products/docker-desktop/ (ensure the daemon is running)
-- PyYAML: `pip install pyyaml` (required for unified interface)
-
-### Conda Setup
-
-Creates a conda env `{tool}` with dependencies and installs the tool.
-
-```bash
-./setup.sh --tool {tool}
-```
-
-### Docker Setup
-
-Builds a Docker image `{tool}:latest` so you can run via `--docker` without installing dependencies on the host.
-
-```bash
-./setup.sh --tool {tool} --docker
-```
-
-**Note for ARM users (macOS):** Docker uses emulation (`--platform linux/amd64`), which is slower but works correctly. All tools run in CPU mode (no GPU support in Docker on macOS).
-
-Download test data:
-
-```bash
-cd tools/{tool}
-./download_test_data.sh
-```
-
-## Configuration
-
-Edit `configs/{tool}_config.yaml` to set parameters. Each config file shows required and optional parameters with defaults.
-
-## Run Inference
-
-### Conda Mode
-
-```bash
-python inference.py --tool {tool} --output-name my_run
-```
-
-Automatically activates the conda environment.
-
-### Docker Mode
-
-```bash
-python inference.py --tool {tool} --docker --output-name my_run
-```
-
-### Results
-
-Results are saved to `results/{tool}/{output-name}/`.
+- `benchmark/README.md` - Benchmark pipeline (folding, negatives, models)
+- `benchmark/download/README.md` - Data download
+- `tools/README.md` - Tool benchmarking

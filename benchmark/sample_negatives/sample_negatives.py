@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from collections import defaultdict
 
-# all 16 dinucleotides
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BENCHMARK_DIR = os.path.dirname(SCRIPT_DIR)
+OUTPUT_DIR = os.path.join(BENCHMARK_DIR, "output")
+
 DINUCLEOTIDES = [a + b for a in 'ACGU' for b in 'ACGU']
 
 
 def compute_dinucleotide_freq(seq):
-    """Compute frequencies of all 16 dinucleotides."""
     seq = seq.upper().replace('T', 'U')
     counts = {di: 0 for di in DINUCLEOTIDES}
     total = 0
@@ -26,7 +28,6 @@ def compute_dinucleotide_freq(seq):
 
 
 def compute_sequence_complexity(seq):
-    """Compute sequence complexity using Shannon entropy."""
     seq = seq.upper().replace('T', 'U')
     n = len(seq)
     counts = {'A': 0, 'C': 0, 'G': 0, 'U': 0}
@@ -43,7 +44,6 @@ def compute_sequence_complexity(seq):
 
 
 def compute_structure_features(struct):
-    """Compute structure features from dot-bracket notation."""
     n = len(struct)
     paired = struct.count('(') + struct.count(')')
     paired_frac = paired / n
@@ -76,17 +76,15 @@ def compute_structure_features(struct):
     return [stem_length, loop_size, bulge_count, paired_frac]
 
 
-def compute_features(row):
-    """Compute feature vector: MFE + dinucleotides + structure + complexity."""
-    mfe = float(row['mfe'])
-    dinuc = compute_dinucleotide_freq(row['sequence'])
-    struct_feat = compute_structure_features(row['structure'])
-    complexity = compute_sequence_complexity(row['sequence'])
+def compute_features(row, mfe_weight=2.0, dinuc_weight=1.0, struct_weight=1.0, complexity_weight=1.0):
+    mfe = float(row['mfe']) * mfe_weight
+    dinuc = [f * dinuc_weight for f in compute_dinucleotide_freq(row['sequence'])]
+    struct_feat = [f * struct_weight for f in compute_structure_features(row['structure'])]
+    complexity = compute_sequence_complexity(row['sequence']) * complexity_weight
     return [mfe] + dinuc + struct_feat + [complexity]
 
 
 def zscore_normalize(features, mean=None, std=None):
-    """Z-score normalize features. Returns normalized features, mean, std."""
     features = np.array(features)
     if mean is None:
         mean = features.mean(axis=0)
@@ -98,7 +96,6 @@ def zscore_normalize(features, mean=None, std=None):
 
 
 def kde(values, xs):
-    """Compute kernel density estimate."""
     n = len(values)
     std = values.std(ddof=1)
     if std == 0:
@@ -113,20 +110,29 @@ def kde(values, xs):
 parser = argparse.ArgumentParser()
 parser.add_argument('--positives', required=True)
 parser.add_argument('--all_windows', required=True)
-parser.add_argument('--negatives', required=True)
-parser.add_argument('--balanced', required=True)
-parser.add_argument('--plot_dir', required=True)
+parser.add_argument('--negatives', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'negatives.csv'))
+parser.add_argument('--balanced', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'balanced.csv'))
+parser.add_argument('--plot_dir', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'plots'))
 parser.add_argument('--match_strand', action='store_true', default=True)
 parser.add_argument('--no_match_strand', action='store_true')
 parser.add_argument('--match_chr', action='store_true', default=True)
 parser.add_argument('--no_match_chr', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--mfe_weight', type=float, default=2.0, help='Weight for MFE feature (default: 2.0)')
+parser.add_argument('--dinuc_weight', type=float, default=1.0, help='Weight for dinucleotide features (default: 1.0)')
+parser.add_argument('--struct_weight', type=float, default=1.0, help='Weight for structure features (default: 1.0)')
+parser.add_argument('--complexity_weight', type=float, default=1.0, help='Weight for complexity feature (default: 1.0)')
 args = parser.parse_args()
 
 np.random.seed(args.seed)
 os.makedirs(args.plot_dir, exist_ok=True)
+negatives_dir = os.path.dirname(args.negatives) or '.'
+balanced_dir = os.path.dirname(args.balanced) or '.'
+if negatives_dir != '.':
+    os.makedirs(negatives_dir, exist_ok=True)
+if balanced_dir != '.':
+    os.makedirs(balanced_dir, exist_ok=True)
 
-# load positives
 positives = []
 positive_window_ids = set()
 with open(args.positives) as f:
@@ -135,7 +141,6 @@ with open(args.positives) as f:
         positives.append(row)
         positive_window_ids.add(row['window_id'])
 
-# load all windows and filter negatives
 negatives_pool = []
 with open(args.all_windows) as f:
     reader = csv.DictReader(f)
@@ -146,7 +151,6 @@ with open(args.all_windows) as f:
 print(f"positives: {len(positives)}")
 print(f"negative pool: {len(negatives_pool)}")
 
-# Stratification options
 do_match_strand = args.match_strand and not args.no_match_strand
 do_match_chr = args.match_chr and not args.no_match_chr
 
@@ -159,7 +163,6 @@ def get_chrom(row):
     return parts[0]
 
 def get_stratum(row):
-    """Get stratification key based on matching options."""
     key = []
     if do_match_chr:
         key.append(get_chrom(row))
@@ -167,7 +170,6 @@ def get_stratum(row):
         key.append(get_strand(row))
     return tuple(key) if key else ('all',)
 
-# Count stratum distribution in positives
 pos_stratum_counts = defaultdict(int)
 for row in positives:
     pos_stratum_counts[get_stratum(row)] += 1
@@ -177,7 +179,6 @@ if do_match_chr or do_match_strand:
     for stratum, count in sorted(pos_stratum_counts.items(), key=lambda x: -x[1]):
         print(f"  {stratum}: {count} ({100*count/len(positives):.1f}%)")
 
-# Group negatives by stratum
 neg_by_stratum = defaultdict(list)
 for i, row in enumerate(negatives_pool):
     neg_by_stratum[get_stratum(row)].append(i)
@@ -185,16 +186,13 @@ for i, row in enumerate(negatives_pool):
 if do_match_chr or do_match_strand:
     print(f"negative pool by stratum: {len(neg_by_stratum)} groups")
 
-# compute features for all samples
 print("\ncomputing features...")
-pos_features = np.array([compute_features(row) for row in positives])
-neg_features = np.array([compute_features(row) for row in negatives_pool])
+pos_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in positives])
+neg_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in negatives_pool])
 
-# z-score normalize using positive statistics
 pos_norm, mean, std = zscore_normalize(pos_features)
 neg_norm, _, _ = zscore_normalize(neg_features, mean, std)
 
-# Sampling
 print("\nsampling negatives...")
 
 if do_match_chr or do_match_strand:
@@ -203,7 +201,6 @@ if do_match_chr or do_match_strand:
         stratum_positives_idx = [i for i, row in enumerate(positives) if get_stratum(row) == stratum]
         stratum_negatives_idx = neg_by_stratum[stratum]
 
-        # Build tree for this stratum's negatives
         stratum_neg_norm = neg_norm[stratum_negatives_idx]
         tree = cKDTree(stratum_neg_norm)
 
@@ -239,14 +236,12 @@ else:
 
     sampled_negatives = [negatives_pool[i] for i in sampled_indices]
 
-# write negatives
 with open(args.negatives, 'w', newline='') as f:
     fieldnames = list(sampled_negatives[0].keys())
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(sampled_negatives)
 
-# write balanced dataset
 with open(args.balanced, 'w', newline='') as f:
     fieldnames = list(positives[0].keys()) + ['label']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -260,13 +255,10 @@ with open(args.balanced, 'w', newline='') as f:
         row_copy['label'] = 'negative'
         writer.writerow(row_copy)
 
-# compute features for sampled negatives
-sampled_neg_features = np.array([compute_features(row) for row in sampled_negatives])
+sampled_neg_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in sampled_negatives])
 
-# Feature names for plotting
 FEATURE_NAMES = ['MFE'] + DINUCLEOTIDES + ['stem_len', 'loop_size', 'bulge_count', 'paired_frac', 'complexity']
 
-# Plot 1: MFE comparison
 pos_mfe = pos_features[:, 0]
 neg_mfe = sampled_neg_features[:, 0]
 
@@ -292,7 +284,6 @@ plt.tight_layout()
 plt.savefig(f"{args.plot_dir}/mfe_comparison.png", dpi=150)
 plt.close()
 
-# Plot 2: Dinucleotide bar comparison
 pos_dinuc = pos_features[:, 1:17].mean(axis=0)
 neg_dinuc = sampled_neg_features[:, 1:17].mean(axis=0)
 
@@ -311,7 +302,6 @@ plt.tight_layout()
 plt.savefig(f"{args.plot_dir}/dinucleotide_comparison.png", dpi=150)
 plt.close()
 
-# Plot 3: Dinucleotide KDE grid (4x4)
 fig, axes = plt.subplots(4, 4, figsize=(14, 12))
 for i, (ax, di) in enumerate(zip(axes.flat, DINUCLEOTIDES)):
     pos_vals = pos_features[:, i + 1]
@@ -340,7 +330,6 @@ plt.tight_layout()
 plt.savefig(f"{args.plot_dir}/dinucleotide_kde_grid.png", dpi=150)
 plt.close()
 
-# Plot 4: Structure features comparison
 struct_names = ['stem_len', 'loop_size', 'bulge_count', 'paired_frac', 'complexity']
 pos_struct = pos_features[:, 17:22]
 neg_struct = sampled_neg_features[:, 17:22]
@@ -373,7 +362,6 @@ plt.tight_layout()
 plt.savefig(f"{args.plot_dir}/structure_comparison.png", dpi=150)
 plt.close()
 
-# Plot 5: Strand distribution
 if do_match_strand:
     pos_strands = [get_strand(row) for row in positives]
     neg_strands = [get_strand(row) for row in sampled_negatives]
@@ -397,7 +385,6 @@ if do_match_strand:
     plt.savefig(f"{args.plot_dir}/strand_comparison.png", dpi=150)
     plt.close()
 
-# Plot 6: Chromosome distribution
 if do_match_chr:
     pos_chroms = [get_chrom(row) for row in positives]
     neg_chroms = [get_chrom(row) for row in sampled_negatives]
@@ -421,13 +408,18 @@ if do_match_chr:
     plt.savefig(f"{args.plot_dir}/chr_comparison.png", dpi=150)
     plt.close()
 
-# Summary stats
 print(f"\n{'='*50}")
 print(f"SUMMARY")
 print(f"{'='*50}")
 print(f"positives: {len(positives)}")
 print(f"negatives sampled: {len(sampled_negatives)}")
 print(f"ratio: {len(sampled_negatives)}/{len(positives)} = {len(sampled_negatives)/len(positives):.2f}")
+
+print(f"\nFeature weights:")
+print(f"  MFE: {args.mfe_weight}")
+print(f"  Dinucleotides: {args.dinuc_weight}")
+print(f"  Structure: {args.struct_weight}")
+print(f"  Complexity: {args.complexity_weight}")
 
 print(f"\nMFE - pos mean: {pos_mfe.mean():.2f}, neg mean: {neg_mfe.mean():.2f}, diff: {abs(pos_mfe.mean()-neg_mfe.mean()):.2f}")
 
