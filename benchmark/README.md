@@ -24,7 +24,7 @@ See `download/README.md` for data download scripts.
 Runs RNAfold on sliding windows (default: 200bp, step 50bp) across sequences.
 
 ```bash
-python fold/run_folding.py --input download/data/..
+python fold/run_folding.py --input data/..
 ```
 
 **Parameters:**
@@ -35,8 +35,7 @@ python fold/run_folding.py --input download/data/..
 - `--chr`: Chromosomes to process (default: all)
 - `--cpus`: Number of CPUs (default: 8)
 - `--dna`: Keep DNA bases (default: converts T→U)
-- `--both_strands`: Generate windows for both strands (default: on)
-- `--single_strand`: Only process forward strand
+- `--single_strand`: Only forward strand (default: both strands)
 - `--max_repeat_frac`: Max repeat fraction (default: 0.1)
 
 **Outputs:**

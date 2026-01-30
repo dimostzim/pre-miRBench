@@ -20,7 +20,7 @@ parser.add_argument("--output", required=True)
 parser.add_argument("--chr", dest="chromosomes", default=None,
                     help="Comma-separated list of chromosomes to process (default: all)")
 parser.add_argument("--dna", action="store_true", help="Keep DNA bases (default: convert T→U)")
-parser.add_argument("--both_strands", action="store_true", help="Generate windows for both strands")
+parser.add_argument("--single_strand", action="store_true", help="Only forward strand (default: both strands)")
 parser.add_argument("--max_repeat_frac", type=float, default=1.0,
                     help="Max fraction of repeat-masked (lowercase) bases (default: 1.0 = no filter)")
 args = parser.parse_args()
@@ -58,7 +58,7 @@ with open(args.output, "w") as out:
         seq_clean = seq.replace(" ", "").replace("\t", "")
 
         strands = [('+', seq_clean)]
-        if args.both_strands:
+        if not args.single_strand:
             strands.append(('-', reverse_complement(seq_clean)))
 
         for strand, strand_seq in strands:
