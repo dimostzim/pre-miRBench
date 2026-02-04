@@ -2,6 +2,7 @@
 import argparse
 import csv
 import math
+import os
 from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
@@ -64,9 +65,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--csv', required=True)
 parser.add_argument('--bed', required=True)
 parser.add_argument('--output', required=True)
+parser.add_argument('--output_collapsed',
+                    help="Output CSV for one window per miRNA (center-closest). Defaults next to --output.")
 parser.add_argument('--summary', required=True)
 parser.add_argument('--plot', required=True)
 args = parser.parse_args()
+
+if not args.output_collapsed:
+    args.output_collapsed = os.path.join(os.path.dirname(args.output), "positives_collapsed.csv")
+os.makedirs(os.path.dirname(args.output_collapsed), exist_ok=True)
 
 mirnas = load_mirnas(args.bed)
 windows_by_chr = load_windows_by_chr(args.csv)
@@ -91,11 +98,44 @@ for window_id, mirna_names in window_to_mirnas.items():
             output_rows.append(row)
             break
 
+collapsed_rows = []
+for mirna in mirnas:
+    containing_windows = find_containing_windows(mirna, windows_by_chr)
+    if not containing_windows:
+        continue
+    mirna_center = (mirna['start'] + mirna['end']) / 2.0
+    best_window = None
+    best_key = None
+    for window in containing_windows:
+        window_center = (window['start'] + window['end']) / 2.0
+        dist = abs(window_center - mirna_center)
+        mfe = float(window['row']['mfe'])
+        key = (dist, mfe, window['start'])
+        if best_key is None or key < best_key:
+            best_key = key
+            best_window = window
+    if best_window:
+        row = best_window['row'].copy()
+        window_id = best_window['window_id']
+        row['target_mirna'] = mirna['name']
+        row['contained_mirnas'] = ';'.join(window_to_mirnas.get(window_id, [mirna['name']]))
+        row['num_mirnas'] = len(window_to_mirnas.get(window_id, [mirna['name']]))
+        collapsed_rows.append(row)
+
 fieldnames = list(output_rows[0].keys())
 with open(args.output, 'w', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(output_rows)
+
+if collapsed_rows:
+    fieldnames = list(collapsed_rows[0].keys())
+    with open(args.output_collapsed, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(collapsed_rows)
+else:
+    print("Warning: no collapsed positives generated.")
 
 with open(args.summary, 'w') as f:
     f.write(f"total windows with mirnas: {len(output_rows)}\n")

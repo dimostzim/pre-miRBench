@@ -26,5 +26,5 @@ if [ -z "$TOOL" ]; then
     exit 1
 fi
 
-cd "$(dirname "$0")/tools/$TOOL"
+cd "$(dirname "$0")/$TOOL"
 ./setup.sh $DOCKER_FLAG

@@ -3,10 +3,11 @@ import argparse
 import csv
 import math
 import os
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BENCHMARK_DIR = os.path.dirname(SCRIPT_DIR)
@@ -106,18 +107,141 @@ def kde(values, xs):
     ys /= (n * bandwidth * math.sqrt(2.0 * math.pi))
     return ys
 
+def parse_window_id(window_id):
+    parts = window_id.split('|')
+    chrom = parts[0]
+    coords = parts[1].split('-')
+    start = int(coords[0]) - 1
+    end = int(coords[1])
+    strand = parts[2] if len(parts) > 2 else '+'
+    return chrom, start, end, strand
+
+def thin_negatives_stride(negatives, seed=42):
+    groups = defaultdict(list)
+    for row in negatives:
+        chrom, start, end, strand = parse_window_id(row['window_id'])
+        groups[(chrom, strand)].append((start, end, row))
+
+    rng = random.Random(seed)
+    thinned = []
+    for (chrom, strand), items in groups.items():
+        items.sort(key=lambda x: x[0])
+        if not items:
+            continue
+
+        window_len = items[0][1] - items[0][0]
+        if len(items) == 1:
+            stride = 1
+        else:
+            diffs = [items[i + 1][0] - items[i][0] for i in range(len(items) - 1) if items[i + 1][0] > items[i][0]]
+            step_est = Counter(diffs).most_common(1)[0][0] if diffs else window_len
+            stride = max(1, math.ceil(window_len / step_est))
+
+        phase = rng.randrange(stride)
+        for idx, (_, _, row) in enumerate(items):
+            if idx % stride == phase:
+                thinned.append(row)
+
+    return thinned
+
+def sample_negatives(positives, negatives_pool, do_match_chr, do_match_strand, mfe_weight, dinuc_weight, struct_weight, complexity_weight):
+    pos_features = np.array([
+        compute_features(row, mfe_weight, dinuc_weight, struct_weight, complexity_weight)
+        for row in positives
+    ])
+    neg_features = np.array([
+        compute_features(row, mfe_weight, dinuc_weight, struct_weight, complexity_weight)
+        for row in negatives_pool
+    ])
+
+    pos_norm, mean, std = zscore_normalize(pos_features)
+    neg_norm, _, _ = zscore_normalize(neg_features, mean, std)
+
+    def get_strand(row):
+        return row['window_id'].split('|')[2]
+
+    def get_chrom(row):
+        return row['window_id'].split('|')[0]
+
+    def get_stratum(row):
+        key = []
+        if do_match_chr:
+            key.append(get_chrom(row))
+        if do_match_strand:
+            key.append(get_strand(row))
+        return tuple(key) if key else ('all',)
+
+    if do_match_chr or do_match_strand:
+        pos_stratum_counts = defaultdict(int)
+        for row in positives:
+            pos_stratum_counts[get_stratum(row)] += 1
+
+        neg_by_stratum = defaultdict(list)
+        for i, row in enumerate(negatives_pool):
+            neg_by_stratum[get_stratum(row)].append(i)
+
+        sampled_negatives = []
+        for stratum in pos_stratum_counts:
+            stratum_pos_idx = [i for i, row in enumerate(positives) if get_stratum(row) == stratum]
+            stratum_neg_idx = neg_by_stratum.get(stratum, [])
+            if not stratum_neg_idx:
+                stratum_neg_idx = list(range(len(negatives_pool)))
+
+            stratum_neg_norm = neg_norm[stratum_neg_idx]
+            tree = cKDTree(stratum_neg_norm)
+
+            used_indices = set()
+            for pos_idx in stratum_pos_idx:
+                pos_vec = pos_norm[pos_idx]
+                k = min(100, len(stratum_neg_idx))
+                distances, indices = tree.query(pos_vec, k=k)
+
+                for local_idx in np.atleast_1d(indices):
+                    if local_idx not in used_indices:
+                        used_indices.add(local_idx)
+                        global_idx = stratum_neg_idx[local_idx]
+                        sampled_negatives.append(negatives_pool[global_idx])
+                        break
+
+    else:
+        tree = cKDTree(neg_norm)
+        used_indices = set()
+        sampled_indices = []
+
+        for pos_vec in pos_norm:
+            k = min(100, len(negatives_pool))
+            distances, indices = tree.query(pos_vec, k=k)
+
+            for idx in np.atleast_1d(indices):
+                if idx not in used_indices:
+                    used_indices.add(idx)
+                    sampled_indices.append(idx)
+                    break
+
+        sampled_negatives = [negatives_pool[i] for i in sampled_indices]
+
+    sampled_neg_features = np.array([
+        compute_features(row, mfe_weight, dinuc_weight, struct_weight, complexity_weight)
+        for row in sampled_negatives
+    ])
+
+    return sampled_negatives, pos_features, sampled_neg_features
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--positives', required=True)
 parser.add_argument('--all_windows', required=True)
-parser.add_argument('--negatives', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'negatives.csv'))
 parser.add_argument('--balanced', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'balanced.csv'))
+parser.add_argument('--imbalanced', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'imbalanced.csv'))
+parser.add_argument('--positives_collapsed', help='Optional collapsed positives CSV (one window per miRNA).')
+parser.add_argument('--balanced_collapsed', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'balanced_collapsed.csv'))
+parser.add_argument('--imbalanced_collapsed', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'imbalanced_collapsed.csv'))
 parser.add_argument('--plot_dir', default=os.path.join(OUTPUT_DIR, 'sample_negatives_output', 'plots'))
 parser.add_argument('--match_strand', action='store_true', default=True)
 parser.add_argument('--no_match_strand', action='store_true')
 parser.add_argument('--match_chr', action='store_true', default=True)
 parser.add_argument('--no_match_chr', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--nonoverlap_seed', type=int, default=42)
 parser.add_argument('--mfe_weight', type=float, default=2.0, help='Weight for MFE feature (default: 2.0)')
 parser.add_argument('--dinuc_weight', type=float, default=1.0, help='Weight for dinucleotide features (default: 1.0)')
 parser.add_argument('--struct_weight', type=float, default=1.0, help='Weight for structure features (default: 1.0)')
@@ -126,12 +250,18 @@ args = parser.parse_args()
 
 np.random.seed(args.seed)
 os.makedirs(args.plot_dir, exist_ok=True)
-negatives_dir = os.path.dirname(args.negatives) or '.'
 balanced_dir = os.path.dirname(args.balanced) or '.'
-if negatives_dir != '.':
-    os.makedirs(negatives_dir, exist_ok=True)
+imbalanced_dir = os.path.dirname(args.imbalanced) or '.'
+balanced_collapsed_dir = os.path.dirname(args.balanced_collapsed) or '.'
+imbalanced_collapsed_dir = os.path.dirname(args.imbalanced_collapsed) or '.'
 if balanced_dir != '.':
     os.makedirs(balanced_dir, exist_ok=True)
+if imbalanced_dir != '.':
+    os.makedirs(imbalanced_dir, exist_ok=True)
+if balanced_collapsed_dir != '.':
+    os.makedirs(balanced_collapsed_dir, exist_ok=True)
+if imbalanced_collapsed_dir != '.':
+    os.makedirs(imbalanced_collapsed_dir, exist_ok=True)
 
 positives = []
 positive_window_ids = set()
@@ -155,12 +285,10 @@ do_match_strand = args.match_strand and not args.no_match_strand
 do_match_chr = args.match_chr and not args.no_match_chr
 
 def get_strand(row):
-    parts = row['window_id'].split('|')
-    return parts[2]
+    return row['window_id'].split('|')[2]
 
 def get_chrom(row):
-    parts = row['window_id'].split('|')
-    return parts[0]
+    return row['window_id'].split('|')[0]
 
 def get_stratum(row):
     key = []
@@ -186,61 +314,17 @@ for i, row in enumerate(negatives_pool):
 if do_match_chr or do_match_strand:
     print(f"negative pool by stratum: {len(neg_by_stratum)} groups")
 
-print("\ncomputing features...")
-pos_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in positives])
-neg_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in negatives_pool])
-
-pos_norm, mean, std = zscore_normalize(pos_features)
-neg_norm, _, _ = zscore_normalize(neg_features, mean, std)
-
 print("\nsampling negatives...")
-
-if do_match_chr or do_match_strand:
-    sampled_negatives = []
-    for stratum in pos_stratum_counts:
-        stratum_positives_idx = [i for i, row in enumerate(positives) if get_stratum(row) == stratum]
-        stratum_negatives_idx = neg_by_stratum[stratum]
-
-        stratum_neg_norm = neg_norm[stratum_negatives_idx]
-        tree = cKDTree(stratum_neg_norm)
-
-        used_indices = set()
-        for pos_idx in stratum_positives_idx:
-            pos_vec = pos_norm[pos_idx]
-            k = min(100, len(stratum_negatives_idx))
-            distances, indices = tree.query(pos_vec, k=k)
-
-            for local_idx in indices:
-                if local_idx not in used_indices:
-                    used_indices.add(local_idx)
-                    global_idx = stratum_negatives_idx[local_idx]
-                    sampled_negatives.append(negatives_pool[global_idx])
-                    break
-
-        print(f"  {stratum}: sampled {len(used_indices)} negatives")
-
-else:
-    tree = cKDTree(neg_norm)
-    used_indices = set()
-    sampled_indices = []
-
-    for i, pos_vec in enumerate(pos_norm):
-        k = min(100, len(negatives_pool))
-        distances, indices = tree.query(pos_vec, k=k)
-
-        for idx in indices:
-            if idx not in used_indices:
-                used_indices.add(idx)
-                sampled_indices.append(idx)
-                break
-
-    sampled_negatives = [negatives_pool[i] for i in sampled_indices]
-
-with open(args.negatives, 'w', newline='') as f:
-    fieldnames = list(sampled_negatives[0].keys())
-    writer = csv.DictWriter(f, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(sampled_negatives)
+sampled_negatives, pos_features, sampled_neg_features = sample_negatives(
+    positives,
+    negatives_pool,
+    do_match_chr,
+    do_match_strand,
+    args.mfe_weight,
+    args.dinuc_weight,
+    args.struct_weight,
+    args.complexity_weight,
+)
 
 with open(args.balanced, 'w', newline='') as f:
     fieldnames = list(positives[0].keys()) + ['label']
@@ -255,7 +339,18 @@ with open(args.balanced, 'w', newline='') as f:
         row_copy['label'] = 'negative'
         writer.writerow(row_copy)
 
-sampled_neg_features = np.array([compute_features(row, args.mfe_weight, args.dinuc_weight, args.struct_weight, args.complexity_weight) for row in sampled_negatives])
+with open(args.imbalanced, 'w', newline='') as f:
+    fieldnames = list(positives[0].keys()) + ['label']
+    writer = csv.DictWriter(f, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in positives:
+        row_copy = row.copy()
+        row_copy['label'] = 'positive'
+        writer.writerow(row_copy)
+    for row in negatives_pool:
+        row_copy = row.copy()
+        row_copy['label'] = 'negative'
+        writer.writerow(row_copy)
 
 FEATURE_NAMES = ['MFE'] + DINUCLEOTIDES + ['stem_len', 'loop_size', 'bulge_count', 'paired_frac', 'complexity']
 
@@ -413,6 +508,7 @@ print(f"SUMMARY")
 print(f"{'='*50}")
 print(f"positives: {len(positives)}")
 print(f"negatives sampled: {len(sampled_negatives)}")
+print(f"negatives (all): {len(negatives_pool)}")
 print(f"ratio: {len(sampled_negatives)}/{len(positives)} = {len(sampled_negatives)/len(positives):.2f}")
 
 print(f"\nFeature weights:")
@@ -434,3 +530,59 @@ for name, diff in zip(struct_names, struct_diffs):
     print(f"  {name}: {diff:.4f}")
 
 print(f"\nPlots saved to {args.plot_dir}/")
+print(f"Imbalanced CSV: {args.imbalanced}")
+
+if args.positives_collapsed:
+    collapsed_positives = []
+    with open(args.positives_collapsed) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            collapsed_positives.append(row)
+
+    if collapsed_positives:
+        negatives_nonoverlap = thin_negatives_stride(negatives_pool, seed=args.nonoverlap_seed)
+
+        sampled_negatives_nonoverlap, _, _ = sample_negatives(
+            collapsed_positives,
+            negatives_nonoverlap,
+            do_match_chr,
+            do_match_strand,
+            args.mfe_weight,
+            args.dinuc_weight,
+            args.struct_weight,
+            args.complexity_weight,
+        )
+
+        with open(args.balanced_collapsed, 'w', newline='') as f:
+            fieldnames = list(collapsed_positives[0].keys()) + ['label']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in collapsed_positives:
+                row_copy = row.copy()
+                row_copy['label'] = 'positive'
+                writer.writerow(row_copy)
+            for row in sampled_negatives_nonoverlap:
+                row_copy = row.copy()
+                row_copy['label'] = 'negative'
+                writer.writerow(row_copy)
+
+        with open(args.imbalanced_collapsed, 'w', newline='') as f:
+            fieldnames = list(collapsed_positives[0].keys()) + ['label']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in collapsed_positives:
+                row_copy = row.copy()
+                row_copy['label'] = 'positive'
+                writer.writerow(row_copy)
+            for row in negatives_nonoverlap:
+                row_copy = row.copy()
+                row_copy['label'] = 'negative'
+                writer.writerow(row_copy)
+
+        print(f"\nCollapsed positives: {len(collapsed_positives)}")
+        print(f"Negatives (non-overlap): {len(negatives_nonoverlap)}")
+        print(f"Negatives sampled (non-overlap): {len(sampled_negatives_nonoverlap)}")
+        print(f"Balanced (collapsed) CSV: {args.balanced_collapsed}")
+        print(f"Imbalanced (collapsed) CSV: {args.imbalanced_collapsed}")
+    else:
+        print("\nNo rows found in --positives_collapsed; skipping collapsed outputs.")
