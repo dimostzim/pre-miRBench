@@ -6,9 +6,11 @@ channels:
 dependencies:
   - python=3.6
   - numpy
+  - cudatoolkit=10.0
+  - cudnn=7.6
   - viennarna
   - pip
   - pip:
-      - tensorflow==1.14.0
+      - tensorflow-gpu==1.14.0
       - keras==2.2.4
       - h5py==2.10.0

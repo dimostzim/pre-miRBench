@@ -15,6 +15,9 @@ dependencies:
   - mkl
   - mkl-service
   - theano=1.0.5
+  - cudatoolkit=10.0
+  - cudnn=7.6
+  - pygpu
   - pip
   - pip:
       - keras==2.2.4

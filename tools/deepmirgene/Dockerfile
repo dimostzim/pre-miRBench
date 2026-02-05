@@ -23,7 +23,7 @@ RUN ln -sf /usr/include/crypt.h /opt/conda/envs/deepmirgene/include/python3.7m/c
 ENV PATH="/opt/conda/envs/deepmirgene/bin:${PATH}"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/deepmirgene/lib"
 ENV KERAS_BACKEND="theano"
-ENV THEANO_FLAGS="optimizer=None,linker=py"
+ENV THEANO_FLAGS="optimizer=None,linker=py,device=cuda,floatX=float32"
 
 RUN git clone https://github.com/eleventh83/deepMiRGene.git deepmirgene_src
 

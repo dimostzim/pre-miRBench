@@ -1,10 +1,12 @@
 name: mire2e
 channels:
-  - conda-forge
   - pytorch
+  - nvidia
+  - conda-forge
 dependencies:
   - python=3.9
   - pytorch>=1.7
+  - pytorch-cuda=11.8
   - pip
   - pip:
       - biopython>=1.78

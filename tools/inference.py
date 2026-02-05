@@ -25,7 +25,7 @@ def main():
 
     if args.docker:
         cmd = [
-            "docker", "run", "--rm", "--platform", "linux/amd64",
+            "docker", "run", "--rm", "--gpus", "all", "--platform", "linux/amd64",
             "-v", f"{repo_root}:/work",
             f"{args.tool}:latest"
         ]
