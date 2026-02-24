@@ -29,6 +29,13 @@ Docker images; instead we add wrappers and evaluation glue around them.
   - GPU support is provided via conda `cudatoolkit`/`cudnn` in the tool
     environments (no CUDA base images). Rebuild images after pulling these
     changes (older images are CPU‑only).
+  - `--cpu_tools` lets you force specific tools to CPU (useful if TF/Theano
+    throws GPU runtime errors).
+  - `--shard_size N` splits large datasets into N‑row shards and runs tools per
+    shard, then merges predictions (recommended for imbalanced/full runs).
+  - `--shard_root` lets you store all shard files under a shared external
+    directory (keeps `benchmark/output/tool_eval/<dataset>` clean).
+  - `--reuse_shards` skips re‑sharding if shard CSVs already exist.
   - miRe2e length must remain **100** for the pretrained model; larger values
     will fail with shape errors. Use `--mire2e_step 100` if you want two windows
     per 200‑nt sequence and aggregate with `--mire2e_agg` (default `max`).
