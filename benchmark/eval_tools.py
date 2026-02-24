@@ -166,6 +166,113 @@ def write_mirdnn_fold(dataset_csv, fold_path, label_ids=None, drop_ambiguous=Fal
     if missing:
         print(f"[write_mirdnn_fold] Skipped {missing} rows missing structure/mfe")
 
+
+def shard_dataset(dataset_csv, shard_root, shard_size, drop_ambiguous=False, max_rows=None, seed=42, reuse_existing=False):
+    os.makedirs(shard_root, exist_ok=True)
+    existing = sorted(
+        f for f in os.listdir(shard_root)
+        if f.startswith("shard_") and f.endswith(".csv")
+    )
+    if reuse_existing and existing:
+        shard_csvs = [os.path.join(shard_root, f) for f in existing]
+        labels = {}
+        for shard_csv in shard_csvs:
+            with open(shard_csv, newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    seq_id = row["window_id"]
+                    labels[seq_id] = 1 if row["label"] == "positive" else 0
+        print(f"[shard_dataset] Reusing {len(shard_csvs)} shards from {shard_root}")
+        return shard_csvs, labels
+
+    for name in os.listdir(shard_root):
+        if name.startswith("shard_") and (name.endswith(".csv") or os.path.isdir(os.path.join(shard_root, name))):
+            path = os.path.join(shard_root, name)
+            if os.path.isdir(path):
+                for root, dirs, files in os.walk(path, topdown=False):
+                    for fname in files:
+                        os.remove(os.path.join(root, fname))
+                    for dname in dirs:
+                        os.rmdir(os.path.join(root, dname))
+                os.rmdir(path)
+            else:
+                os.remove(path)
+
+    allowed = set("ACGUT")
+    labels = {}
+    shard_csvs = []
+    kept = 0
+    dropped = 0
+
+    def write_rows(rows, fieldnames):
+        nonlocal kept
+        shard_idx = 0
+        writer = None
+        out_f = None
+        for row in rows:
+            if kept % shard_size == 0:
+                if out_f:
+                    out_f.close()
+                shard_csv = os.path.join(shard_root, f"shard_{shard_idx:05d}.csv")
+                shard_csvs.append(shard_csv)
+                out_f = open(shard_csv, "w", newline="")
+                writer = csv.DictWriter(out_f, fieldnames=fieldnames)
+                writer.writeheader()
+                shard_idx += 1
+            writer.writerow(row)
+            seq_id = row["window_id"]
+            labels[seq_id] = 1 if row["label"] == "positive" else 0
+            kept += 1
+        if out_f:
+            out_f.close()
+
+    if max_rows:
+        rng = np.random.default_rng(seed)
+        reservoir = []
+        with open(dataset_csv, newline="") as f:
+            reader = csv.DictReader(f)
+            for i, row in enumerate(reader):
+                seq = row["sequence"].strip().replace(" ", "").upper()
+                if drop_ambiguous and any(c not in allowed for c in seq):
+                    dropped += 1
+                    continue
+                if i < max_rows:
+                    reservoir.append(row)
+                else:
+                    j = int(rng.integers(0, i + 1))
+                    if j < max_rows:
+                        reservoir[j] = row
+        if reservoir:
+            write_rows(reservoir, list(reservoir[0].keys()))
+    else:
+        with open(dataset_csv, newline="") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            for row in reader:
+                seq = row["sequence"].strip().replace(" ", "").upper()
+                if drop_ambiguous and any(c not in allowed for c in seq):
+                    dropped += 1
+                    continue
+                if kept % shard_size == 0:
+                    shard_idx = len(shard_csvs)
+                    shard_csv = os.path.join(shard_root, f"shard_{shard_idx:05d}.csv")
+                    shard_csvs.append(shard_csv)
+                    out_f = open(shard_csv, "w", newline="")
+                    writer = csv.DictWriter(out_f, fieldnames=fieldnames)
+                    writer.writeheader()
+                writer.writerow(row)
+                seq_id = row["window_id"]
+                labels[seq_id] = 1 if row["label"] == "positive" else 0
+                kept += 1
+                if kept % shard_size == 0:
+                    out_f.close()
+            if "out_f" in locals() and not out_f.closed:
+                out_f.close()
+
+    if drop_ambiguous and dropped:
+        print(f"[shard_dataset] Dropped {dropped} ambiguous sequences from {dataset_csv}")
+    print(f"[shard_dataset] Wrote {kept} rows into {len(shard_csvs)} shards at {shard_root}")
+    return shard_csvs, labels
 def parse_mirdnn_predictions(path):
     preds = {}
     with open(path, newline="") as f:
@@ -325,6 +432,37 @@ def parse_mustard_predictions(path):
     return preds
 
 
+def parse_mustard_intermediate(pred_path, bed_path, positive_class_idx=1):
+    preds = {}
+
+    import gzip
+
+    pred_opener = gzip.open if pred_path.endswith(".gz") else open
+    bed_opener = gzip.open if bed_path.endswith(".gz") else open
+
+    with pred_opener(pred_path, "rt") as pred_f, bed_opener(bed_path, "rt") as bed_f:
+        for pred_line, bed_line in zip(pred_f, bed_f):
+            pred_line = pred_line.strip()
+            bed_line = bed_line.strip()
+            if not pred_line or not bed_line:
+                continue
+
+            pred_parts = pred_line.split()
+            bed_parts = bed_line.split("\t")
+            if len(bed_parts) < 4:
+                continue
+
+            class_idx = positive_class_idx if len(pred_parts) > positive_class_idx else 0
+            try:
+                score = float(pred_parts[class_idx])
+            except (ValueError, IndexError):
+                continue
+
+            preds[bed_parts[3]] = score
+
+    return preds
+
+
 def compute_metrics(y_true, y_score):
     y_true = np.asarray(y_true)
     y_score = np.asarray(y_score)
@@ -406,8 +544,10 @@ def run_tool(tool, fasta_path, out_dir, extra_args, runner, repo_root, mustard_c
         if tool == "mustard":
             cmd = [
                 *docker_prefix,
+                "--entrypoint", "python",
                 "-v", f"{repo_root}:/work",
                 image,
+                "/work/tools/mustard/inference.py",
                 "--targetIntervals", host_to_container(mustard_cfg["bed"], repo_root),
                 "--genome", host_to_container(mustard_cfg["genome"], repo_root),
                 "--consDir", host_to_container(mustard_cfg["cons_dir"], repo_root),
@@ -560,19 +700,59 @@ def load_predictions(
     if tool == "mustard":
         if mustard_cfg is None:
             raise ValueError("mustard requires config to locate prediction files.")
-        bed_dir = os.path.join(out_dir, mustard_cfg["model_dir"], "bed_tracks")
-        all_pred = os.path.join(bed_dir, "all.predictions.class_1.bed.gz")
-        if os.path.exists(all_pred):
-            return parse_mustard_predictions(all_pred)
-        # fallback to per-chrom files
+
+        # MuStARD writes under <out_dir>/predict/static/<model_dir>/...
+        # Keep legacy fallback for older layouts.
+        bed_dirs = [
+            os.path.join(out_dir, "predict", "static", mustard_cfg["model_dir"], "bed_tracks"),
+            os.path.join(out_dir, "predict", "scan", mustard_cfg["model_dir"], "bed_tracks"),
+            os.path.join(out_dir, mustard_cfg["model_dir"], "bed_tracks"),
+        ]
+
+        for bed_dir in bed_dirs:
+            all_pred = os.path.join(bed_dir, "all.predictions.class_1.bed.gz")
+            if os.path.exists(all_pred):
+                return parse_mustard_predictions(all_pred)
+
+            preds = {}
+            for chrom in mustard_cfg["chrom_list"].split(","):
+                chrom = chrom.strip()
+                if not chrom:
+                    continue
+                path = os.path.join(bed_dir, f"predictions.{chrom}.class_1.bed.gz")
+                if os.path.exists(path):
+                    preds.update(parse_mustard_predictions(path))
+            if preds:
+                return preds
+
+        # Fallback: map intermediate class scores back to window_id via targets.<chrom>.bed.gz.
         preds = {}
-        for chrom in mustard_cfg["chrom_list"].split(","):
-            chrom = chrom.strip()
-            if not chrom:
-                continue
-            path = os.path.join(bed_dir, f"predictions.{chrom}.class_1.bed.gz")
-            if os.path.exists(path):
-                preds.update(parse_mustard_predictions(path))
+        interm_dirs = [
+            os.path.join(out_dir, "predict", "static", mustard_cfg["model_dir"], "intermediate_files"),
+            os.path.join(out_dir, "predict", "scan", mustard_cfg["model_dir"], "intermediate_files"),
+            os.path.join(out_dir, mustard_cfg["model_dir"], "intermediate_files"),
+        ]
+        bed_roots = [
+            os.path.join(out_dir, "predict", "static"),
+            os.path.join(out_dir, "predict", "scan"),
+            out_dir,
+        ]
+        chroms = [c.strip() for c in mustard_cfg["chrom_list"].split(",") if c.strip()]
+        for chrom in chroms:
+            pred_candidates = [
+                os.path.join(interm_dir, f"targets.{chrom}.predictions.txt.gz")
+                for interm_dir in interm_dirs
+            ] + [
+                os.path.join(interm_dir, f"targets.{chrom}.predictions.txt")
+                for interm_dir in interm_dirs
+            ]
+            bed_candidates = [os.path.join(root, f"targets.{chrom}.bed.gz") for root in bed_roots]
+
+            pred_path = next((p for p in pred_candidates if os.path.exists(p)), None)
+            bed_path = next((p for p in bed_candidates if os.path.exists(p)), None)
+            if pred_path and bed_path:
+                preds.update(parse_mustard_intermediate(pred_path, bed_path, positive_class_idx=1))
+
         return preds
     raise ValueError(f"Unknown tool: {tool}")
 
@@ -604,8 +784,16 @@ def main():
                         help="Center-trim DeepMir inputs to this length (e.g. 100).")
     parser.add_argument("--mirdnn_use_fold", action="store_true",
                         help="Use structure/mfe columns to build mirdnn fold input (skip RNAfold).")
+    parser.add_argument("--cpu_tools", nargs="+", default=[],
+                        help="Tools to force on CPU even when GPU is enabled (dnnpremir is always CPU).")
     parser.add_argument("--no_gpu", action="store_true",
                         help="Disable GPU usage (default: try GPU for all tools).")
+    parser.add_argument("--shard_size", type=int, default=None,
+                        help="Rows per shard for large datasets (e.g. 10000).")
+    parser.add_argument("--shard_root", default="benchmark/output/tool_eval_shards",
+                        help="Root directory for shard files (default: benchmark/output/tool_eval_shards).")
+    parser.add_argument("--reuse_shards", action="store_true",
+                        help="Reuse existing shard CSVs if present (skip re-sharding).")
     parser.add_argument("--verbose", action="store_true", help="Show tool stdout/stderr.")
     parser.add_argument("--tool_args", default=None,
                         help="JSON file mapping tool->list of extra args, e.g. {'mirdnn':['--device','cpu']}")
@@ -624,6 +812,9 @@ def main():
     rows_out = []
 
     use_gpu = not args.no_gpu
+    # DNNPreMiR is unstable on GPU in this benchmark setup; default to CPU.
+    cpu_tools = {"dnnpremir"}
+    cpu_tools.update(args.cpu_tools or [])
     total_datasets = len(args.datasets)
     total_tools = len(args.tools)
 
@@ -631,6 +822,204 @@ def main():
         dataset_name = os.path.splitext(os.path.basename(dataset))[0]
         dataset_dir = os.path.join(args.work_dir, dataset_name)
         os.makedirs(dataset_dir, exist_ok=True)
+
+        if args.shard_size:
+            shard_root = os.path.join(args.shard_root, dataset_name, f"shards_{args.shard_size}")
+            shard_csvs, labels = shard_dataset(
+                dataset,
+                shard_root,
+                args.shard_size,
+                drop_ambiguous=args.drop_ambiguous,
+                max_rows=args.max_rows,
+                seed=args.seed,
+                reuse_existing=args.reuse_shards,
+            )
+            label_ids = set(labels.keys())
+
+            shard_infos = []
+            for shard_idx, shard_csv in enumerate(shard_csvs):
+                shard_dir = os.path.join(shard_root, f"shard_{shard_idx:05d}")
+                os.makedirs(shard_dir, exist_ok=True)
+
+                shard_fasta = os.path.join(shard_dir, "input.fa")
+                shard_labels, seq_order, seq_lengths, _ = write_fasta(
+                    shard_csv,
+                    shard_fasta,
+                    max_rows=None,
+                    seed=args.seed,
+                    drop_ambiguous=False,
+                )
+                shard_label_ids = set(shard_labels.keys())
+
+                deepmir_fasta = None
+                if "deepmir" in args.tools and args.deepmir_len:
+                    deepmir_fasta = os.path.join(shard_dir, f"input_deepmir_{args.deepmir_len}.fa")
+                    if not os.path.exists(deepmir_fasta):
+                        write_trimmed_fasta(
+                            shard_csv,
+                            deepmir_fasta,
+                            args.deepmir_len,
+                            label_ids=shard_label_ids,
+                            drop_ambiguous=False,
+                        )
+
+                mirdnn_fold = None
+                if "mirdnn" in args.tools and args.mirdnn_use_fold:
+                    mirdnn_fold = os.path.join(shard_dir, "input_mirdnn.fold")
+                    if not os.path.exists(mirdnn_fold):
+                        write_mirdnn_fold(
+                            shard_csv,
+                            mirdnn_fold,
+                            label_ids=shard_label_ids,
+                            drop_ambiguous=False,
+                        )
+
+                mustard_cfg = None
+                if "mustard" in args.tools:
+                    bed_path = os.path.join(shard_dir, "mustard", "targets.bed")
+                    os.makedirs(os.path.dirname(bed_path), exist_ok=True)
+                    chrom_set = set()
+                    mustard_win = args.mustard_win_size
+                    if not os.path.exists(bed_path):
+                        with open(shard_csv, newline="") as f, open(bed_path, "w") as bed_out:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                start = int(row["start"]) - 1
+                                end = int(row["end"])
+                                if mustard_win:
+                                    center = (start + end) // 2
+                                    start = max(0, center - mustard_win // 2)
+                                    end = start + mustard_win
+                                chrom = row["chrom"]
+                                strand = row.get("strand", "+")
+                                name = row["window_id"]
+                                bed_out.write(f"{chrom}\t{start}\t{end}\t{name}\t0\t{strand}\n")
+                                chrom_set.add(chrom)
+                    else:
+                        with open(bed_path, "r") as bed_in:
+                            for line in bed_in:
+                                if line.strip():
+                                    chrom_set.add(line.split("\t")[0])
+
+                    chrom_list = ",".join(sorted(chrom_set))
+                    win_size = mustard_win if mustard_win else (max(seq_lengths.values()) if seq_lengths else 200)
+                    mustard_cfg = {
+                        "bed": bed_path,
+                        "chrom_list": chrom_list,
+                        "genome": args.mustard_genome,
+                        "cons_dir": args.mustard_cons_dir,
+                        "model": args.mustard_model,
+                        "input_mode": args.mustard_input_mode,
+                        "threads": args.mustard_threads,
+                        "win_size": win_size,
+                        "step": win_size,
+                        "model_dir": "eval",
+                    }
+
+                shard_infos.append({
+                    "shard_dir": shard_dir,
+                    "fasta": shard_fasta,
+                    "deepmir_fasta": deepmir_fasta,
+                    "mirdnn_fold": mirdnn_fold,
+                    "seq_order": seq_order,
+                    "seq_lengths": seq_lengths,
+                    "mustard_cfg": mustard_cfg,
+                })
+
+            for tool_idx, tool in enumerate(args.tools, start=1):
+                print(f"[{dataset_idx}/{total_datasets}] {dataset_name} -> [{tool_idx}/{total_tools}] {tool}")
+                sys.stdout.flush()
+                status = "ok"
+                note = ""
+                preds = {}
+
+                try:
+                    for shard_info in shard_infos:
+                        shard_dir = shard_info["shard_dir"]
+                        tool_out_dir = os.path.join(shard_dir, tool)
+                        if not args.skip_run or not os.path.exists(tool_out_dir):
+                            extra_args = tool_args.get(tool, [])
+                            tool_use_gpu = use_gpu and tool not in cpu_tools
+                            if tool == "mire2e":
+                                if args.mire2e_max_records is not None:
+                                    extra_args += ["--max_records", str(args.mire2e_max_records)]
+                                if tool_use_gpu:
+                                    extra_args = ensure_device_arg(extra_args, "cuda:0")
+                            if tool == "mirdnn" and tool_use_gpu:
+                                extra_args = ensure_device_arg(extra_args, "cuda:0")
+                            tool_fasta = shard_info["deepmir_fasta"] if (tool == "deepmir" and shard_info["deepmir_fasta"]) else shard_info["fasta"]
+                            run_tool(
+                                tool,
+                                tool_fasta,
+                                tool_out_dir,
+                                extra_args,
+                                args.runner,
+                                repo_root,
+                                shard_info["mustard_cfg"],
+                                quiet=not args.verbose,
+                                mirdnn_fold=shard_info["mirdnn_fold"] if tool == "mirdnn" else None,
+                                use_gpu=tool_use_gpu,
+                            )
+
+                        shard_preds = load_predictions(
+                            tool,
+                            tool_out_dir,
+                            seq_order=shard_info["seq_order"],
+                            seq_lengths=shard_info["seq_lengths"],
+                            tool_args=tool_args,
+                            mire2e_agg=args.mire2e_agg,
+                            mire2e_topk=args.mire2e_topk,
+                            mire2e_length=mire2e_length,
+                            mire2e_step=mire2e_step,
+                            mustard_cfg=shard_info["mustard_cfg"],
+                        )
+                        preds.update(shard_preds)
+
+                    pred_ids = set(preds.keys())
+                    common_ids = list(label_ids & pred_ids)
+
+                    if not common_ids:
+                        status = "no_overlap"
+                        note = "No matching sequence IDs between labels and predictions."
+                        rows_out.append({
+                            "dataset": dataset_name,
+                            "tool": tool,
+                            "status": status,
+                            "note": note,
+                        })
+                        continue
+
+                    y_true = [labels[i] for i in common_ids]
+                    y_score = [preds[i] for i in common_ids]
+
+                    metrics = compute_metrics(y_true, y_score)
+                    rows_out.append({
+                        "dataset": dataset_name,
+                        "tool": tool,
+                        "status": status,
+                        "note": note,
+                        "n_total": len(labels),
+                        "n_pred": len(preds),
+                        "n_eval": len(common_ids),
+                        "pos": int(sum(y_true)),
+                        "neg": int(len(y_true) - sum(y_true)),
+                        **metrics,
+                    })
+                except NotImplementedError as e:
+                    rows_out.append({
+                        "dataset": dataset_name,
+                        "tool": tool,
+                        "status": "unsupported",
+                        "note": str(e),
+                    })
+                except Exception as e:
+                    rows_out.append({
+                        "dataset": dataset_name,
+                        "tool": tool,
+                        "status": "error",
+                        "note": str(e),
+                    })
+            continue
 
         fasta_path = os.path.join(dataset_dir, "input.fa")
         labels, seq_order, seq_lengths, rows_for_bed = write_fasta(
@@ -729,12 +1118,13 @@ def main():
             try:
                 if not args.skip_run or not os.path.exists(tool_out_dir):
                     extra_args = tool_args.get(tool, [])
+                    tool_use_gpu = use_gpu and tool not in cpu_tools
                     if tool == "mire2e":
                         if args.mire2e_max_records is not None:
                             extra_args += ["--max_records", str(args.mire2e_max_records)]
-                        if use_gpu:
+                        if tool_use_gpu:
                             extra_args = ensure_device_arg(extra_args, "cuda:0")
-                    if tool == "mirdnn" and use_gpu:
+                    if tool == "mirdnn" and tool_use_gpu:
                         extra_args = ensure_device_arg(extra_args, "cuda:0")
                     tool_fasta = deepmir_fasta if (tool == "deepmir" and deepmir_fasta) else fasta_path
                     run_tool(
@@ -747,7 +1137,7 @@ def main():
                         mustard_cfg,
                         quiet=not args.verbose,
                         mirdnn_fold=mirdnn_fold if tool == "mirdnn" else None,
-                        use_gpu=use_gpu,
+                        use_gpu=tool_use_gpu,
                     )
 
                 preds = load_predictions(
