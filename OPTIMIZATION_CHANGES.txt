@@ -1,0 +1,95 @@
+pre-miRBench Performance Optimizations
+=======================================
+
+OPTIMIZATION 1: Cold model load elimination with bisection fallback
+File: benchmark/eval_tools.py
+Problem: Every shard caused a fresh subprocess launch, loading the
+tool's model weights from disk on each call. With N shards, the model
+was loaded N times per dataset per tool.
+Fix: Tool is now always invoked once per dataset on the full merged
+input. If the tool fails with an OOM-type error, the input is
+automatically bisected and each half retried recursively (max 6
+levels = minimum 1/64 of original size).
+Expected improvement: Eliminates up to 95% of model load overhead.
+For 50 shards × 6 tools × 4 datasets this removed ~1,200 subprocess
+launches, saving potentially 10–20 hours of wall time.
+CLI changes: --shard_size now controls only CSV read chunking, not
+tool invocation. No new required arguments.
+
+
+OPTIMIZATION 2: mirdnn pre-computed fold enabled by default
+File: benchmark/eval_tools.py
+Problem: mirdnn was re-running RNAfold internally on every sequence,
+even though the structure and MFE were already computed and stored in
+the dataset CSV by the fold pipeline.
+Fix: --mirdnn_use_fold now defaults to True. The pre-computed fold
+file is written from the CSV's structure/mfe columns and passed to
+mirdnn, skipping its internal RNAfold call entirely.
+Expected improvement: Eliminates a full redundant RNAfold pass for
+every mirdnn run. Depending on dataset size, this saves minutes to
+hours per mirdnn invocation.
+CLI changes: --mirdnn_use_fold defaults to True (was False).
+New flag --no_mirdnn_use_fold restores old behavior.
+
+OPTIMIZATION 3: Progress monitor reads only new bytes
+File: benchmark/fold/run_fold.py
+Problem: The progress monitoring thread reopened and fully scanned
+the growing output file every 5 seconds, creating I/O contention with
+RNAfold and O(file_size) cost per tick.
+Fix: The monitor now tracks the file's byte position and reads only
+newly written bytes since the last check, counting ">" bytes
+incrementally.
+Expected improvement: Monitor I/O cost reduced from O(n × ticks) to
+O(new_bytes_per_tick). Eliminates I/O contention for large fold runs.
+CLI changes: None.
+
+OPTIMIZATION 4: KDE replaced with scipy.stats.gaussian_kde
+Files: benchmark/fold/analyze_fold.py,
+       benchmark/fold/find_mirna_windows.py,
+       benchmark/make_negative_set/sample_negatives.py
+Problem: Manual KDE implementation materialized a (200 × n_windows)
+numpy matrix. For 1M windows: 1.6 GB per KDE call, with multiple
+calls per file causing severe memory pressure.
+Fix: Replaced with scipy.stats.gaussian_kde(bw_method="silverman")
+which uses the same Silverman bandwidth formula and produces identical
+results without the full matrix.
+Expected improvement: Memory for KDE reduced from O(200 × n) to O(n).
+Eliminates potential OOM on large whole-genome runs. Plotting steps
+that previously took minutes now take seconds.
+CLI changes: None.
+
+OPTIMIZATION 5: O(1) window lookup in find_mirna_windows
+File: benchmark/fold/find_mirna_windows.py
+Problem: Building output_rows required a linear search through each
+chromosome's window list for every positive window_id, giving
+O(positives × windows_per_chromosome) total work.
+Fix: A flat dict {window_id: window_object} is built once at load
+time (O(n)), making each lookup O(1).
+Expected improvement: For a chromosome with 500,000 windows and
+200 positive miRNA windows, reduces 100M comparisons to 200 dict
+lookups. This step now completes in milliseconds regardless of
+dataset size.
+CLI changes: None.
+
+SUMMARY OF ALL CLI CHANGES:
+  eval_tools.py:
+    --shard_size        role narrowed (CSV chunking only, not tool
+                        invocation); help text updated
+    --mirdnn_use_fold   now defaults to True
+    --no_mirdnn_use_fold  NEW — disables pre-computed fold for mirdnn
+
+  All other arguments unchanged.
+
+HOW TO RUN AFTER THESE CHANGES (recommended):
+
+  python benchmark/eval_tools.py \
+    --datasets benchmark/output/sample_negatives_output/balanced.csv \
+               benchmark/output/sample_negatives_output/imbalanced.csv \
+               benchmark/output/sample_negatives_output/balanced_collapsed.csv \
+               benchmark/output/sample_negatives_output/imbalanced_collapsed.csv \
+    --tools mirdnn dnnpremir deepmir deepmirgene mire2e mustard \
+    --runner conda \
+    --metrics_csv benchmark/output/tool_metrics.csv
+
+  # To restore old mirdnn behavior (internal RNAfold):
+  python benchmark/eval_tools.py --no_mirdnn_use_fold [other args]

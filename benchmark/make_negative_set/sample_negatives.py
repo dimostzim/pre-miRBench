@@ -7,6 +7,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
+from scipy.stats import gaussian_kde
 from collections import Counter, defaultdict
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -97,15 +98,12 @@ def zscore_normalize(features, mean=None, std=None):
 
 
 def kde(values, xs):
-    n = len(values)
-    std = values.std(ddof=1)
-    if std == 0:
-        std = 1
-    bandwidth = 1.06 * std * (n ** (-0.2))
-    diff = (xs[:, None] - values[None, :]) / bandwidth
-    ys = np.exp(-0.5 * diff ** 2).sum(axis=1)
-    ys /= (n * bandwidth * math.sqrt(2.0 * math.pi))
-    return ys
+    if values.std() == 0:
+        ys = np.zeros_like(xs, dtype=float)
+        ys[np.argmin(np.abs(xs - values[0]))] = 1.0
+        return ys
+    kde_obj = gaussian_kde(values, bw_method="silverman")
+    return kde_obj(xs)
 
 def parse_window_id(window_id):
     parts = window_id.split('|')

@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -505,10 +506,10 @@ def host_to_container(path, repo_root):
     return os.path.join("/work", rel)
 
 
-def run_cmd(cmd, quiet, cwd=None):
-    if not quiet:
+def run_cmd(cmd, quiet, cwd=None, capture_stderr=False):
+    if not quiet and not capture_stderr:
         subprocess.check_call(cmd, cwd=cwd)
-        return
+        return ""
     completed = subprocess.run(
         cmd,
         cwd=cwd,
@@ -517,11 +518,20 @@ def run_cmd(cmd, quiet, cwd=None):
         text=True,
     )
     if completed.returncode != 0:
-        if completed.stdout:
-            print(completed.stdout)
-        if completed.stderr:
-            print(completed.stderr, file=sys.stderr)
-        raise subprocess.CalledProcessError(completed.returncode, cmd)
+        if not capture_stderr:
+            if completed.stdout:
+                print(completed.stdout)
+            if completed.stderr:
+                print(completed.stderr, file=sys.stderr)
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            cmd,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
+    if not quiet and completed.stdout:
+        print(completed.stdout, end="")
+    return completed.stderr or ""
 
 
 def ensure_device_arg(args_list, device):
@@ -531,7 +541,19 @@ def ensure_device_arg(args_list, device):
     return args_list + ["--device", device]
 
 
-def run_tool(tool, fasta_path, out_dir, extra_args, runner, repo_root, mustard_cfg, quiet, mirdnn_fold=None, use_gpu=False):
+def run_tool(
+    tool,
+    fasta_path,
+    out_dir,
+    extra_args,
+    runner,
+    repo_root,
+    mustard_cfg,
+    quiet,
+    mirdnn_fold=None,
+    use_gpu=False,
+    capture_stderr=False,
+):
     os.makedirs(out_dir, exist_ok=True)
 
     if runner == "docker":
@@ -634,7 +656,7 @@ def run_tool(tool, fasta_path, out_dir, extra_args, runner, repo_root, mustard_c
 
     cmd += extra_args or []
 
-    run_cmd(cmd, quiet, cwd=None)
+    return run_cmd(cmd, quiet, cwd=None, capture_stderr=capture_stderr)
 
 
 def parse_mire2e_args(tool_args):
@@ -757,6 +779,217 @@ def load_predictions(
     raise ValueError(f"Unknown tool: {tool}")
 
 
+OOM_ERROR_MARKERS = (
+    "CUDA out of memory",
+    "MemoryError",
+    "Killed",
+    "OOM",
+    "out of memory",
+    "Cannot allocate memory",
+)
+
+
+def split_fasta(fasta_path, n, out_a, out_b):
+    count_a = 0
+    count_b = 0
+    record_idx = 0
+    header = None
+    seq_lines = []
+
+    def flush_record(out_f_a, out_f_b):
+        nonlocal count_a, count_b, record_idx, header, seq_lines
+        if header is None:
+            return
+        target = out_f_a if record_idx < n else out_f_b
+        target.write(header)
+        for seq_line in seq_lines:
+            target.write(seq_line)
+        if record_idx < n:
+            count_a += 1
+        else:
+            count_b += 1
+        record_idx += 1
+        header = None
+        seq_lines = []
+
+    with open(fasta_path) as src, open(out_a, "w") as out_f_a, open(out_b, "w") as out_f_b:
+        for line in src:
+            if line.startswith(">"):
+                flush_record(out_f_a, out_f_b)
+                header = line
+            else:
+                seq_lines.append(line)
+        flush_record(out_f_a, out_f_b)
+
+    return count_a, count_b
+
+
+def split_fasta_by_ids(fasta_path, ids_a, out_a, out_b):
+    ids_a = set(ids_a)
+    count_a = 0
+    count_b = 0
+    header = None
+    seq_lines = []
+
+    def flush_record(out_f_a, out_f_b):
+        nonlocal count_a, count_b, header, seq_lines
+        if header is None:
+            return
+        seq_id = header[1:].strip().split()[0]
+        if seq_id in ids_a:
+            target = out_f_a
+            count_a += 1
+        else:
+            target = out_f_b
+            count_b += 1
+        target.write(header)
+        for seq_line in seq_lines:
+            target.write(seq_line)
+        header = None
+        seq_lines = []
+
+    with open(fasta_path) as src, open(out_a, "w") as out_f_a, open(out_b, "w") as out_f_b:
+        for line in src:
+            if line.startswith(">"):
+                flush_record(out_f_a, out_f_b)
+                header = line
+            else:
+                seq_lines.append(line)
+        flush_record(out_f_a, out_f_b)
+
+    return count_a, count_b
+
+
+def run_tool_with_fallback(
+    tool,
+    fasta_path,
+    out_dir,
+    seq_order,
+    seq_lengths,
+    extra_args,
+    runner,
+    repo_root,
+    mustard_cfg,
+    quiet,
+    mirdnn_fold,
+    use_gpu,
+    depth=0,
+    max_depth=6,
+    mire2e_agg="max",
+    mire2e_topk=3,
+    mire2e_length=None,
+    mire2e_step=None,
+):
+    try:
+        run_tool(
+            tool,
+            fasta_path,
+            out_dir,
+            extra_args,
+            runner,
+            repo_root,
+            mustard_cfg,
+            quiet=quiet,
+            mirdnn_fold=mirdnn_fold,
+            use_gpu=use_gpu,
+            capture_stderr=True,
+        )
+        return load_predictions(
+            tool,
+            out_dir,
+            seq_order=seq_order,
+            seq_lengths=seq_lengths,
+            mire2e_agg=mire2e_agg,
+            mire2e_topk=mire2e_topk,
+            mire2e_length=mire2e_length,
+            mire2e_step=mire2e_step,
+            mustard_cfg=mustard_cfg,
+        )
+    except subprocess.CalledProcessError as e:
+        if tool == "mustard":
+            raise
+        if depth >= max_depth:
+            raise
+
+        stderr_text = ((e.stderr or "") + "\n" + (e.output or "")).strip()
+        stderr_lower = stderr_text.lower()
+        is_oom = (e.returncode == 137) or any(marker.lower() in stderr_lower for marker in OOM_ERROR_MARKERS)
+        if not is_oom:
+            raise
+        if seq_order is None or len(seq_order) < 2:
+            raise
+
+        os.makedirs(out_dir, exist_ok=True)
+        n_total = len(seq_order)
+        split_n = n_total // 2
+        split_a_fasta = os.path.join(out_dir, "bisect_a.fa")
+        split_b_fasta = os.path.join(out_dir, "bisect_b.fa")
+        count_a, count_b = split_fasta(fasta_path, split_n, split_a_fasta, split_b_fasta)
+        if count_a == 0 or count_b == 0:
+            raise
+
+        dataset_name = os.path.basename(os.path.dirname(out_dir))
+        print(
+            f"[bisect] {tool} on {dataset_name}: splitting {count_a + count_b} "
+            f"sequences into {count_a} + {count_b} (depth {depth})"
+        )
+
+        seq_order_a = seq_order[:count_a]
+        seq_order_b = seq_order[count_a:count_a + count_b]
+        seq_lengths_a = {seq_id: seq_lengths[seq_id] for seq_id in seq_order_a if seq_id in seq_lengths}
+        seq_lengths_b = {seq_id: seq_lengths[seq_id] for seq_id in seq_order_b if seq_id in seq_lengths}
+
+        mirdnn_fold_a = None
+        mirdnn_fold_b = None
+        if tool == "mirdnn" and mirdnn_fold:
+            mirdnn_fold_a = os.path.join(out_dir, "bisect_a.fold")
+            mirdnn_fold_b = os.path.join(out_dir, "bisect_b.fold")
+            split_fasta_by_ids(mirdnn_fold, seq_order_a, mirdnn_fold_a, mirdnn_fold_b)
+
+        preds_a = run_tool_with_fallback(
+            tool,
+            split_a_fasta,
+            f"{out_dir}_bisect_a",
+            seq_order_a,
+            seq_lengths_a,
+            extra_args,
+            runner,
+            repo_root,
+            mustard_cfg,
+            quiet,
+            mirdnn_fold_a if mirdnn_fold_a else mirdnn_fold,
+            use_gpu,
+            depth=depth + 1,
+            max_depth=max_depth,
+            mire2e_agg=mire2e_agg,
+            mire2e_topk=mire2e_topk,
+            mire2e_length=mire2e_length,
+            mire2e_step=mire2e_step,
+        )
+        preds_b = run_tool_with_fallback(
+            tool,
+            split_b_fasta,
+            f"{out_dir}_bisect_b",
+            seq_order_b,
+            seq_lengths_b,
+            extra_args,
+            runner,
+            repo_root,
+            mustard_cfg,
+            quiet,
+            mirdnn_fold_b if mirdnn_fold_b else mirdnn_fold,
+            use_gpu,
+            depth=depth + 1,
+            max_depth=max_depth,
+            mire2e_agg=mire2e_agg,
+            mire2e_topk=mire2e_topk,
+            mire2e_length=mire2e_length,
+            mire2e_step=mire2e_step,
+        )
+        preds_a.update(preds_b)
+        return preds_a
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run tools on datasets and compute metrics.")
     parser.add_argument("--datasets", nargs="+", default=DEFAULT_DATASETS)
@@ -782,14 +1015,27 @@ def main():
                         help="Override MuStARD window size (e.g. 100 for MuStARD-mirS).")
     parser.add_argument("--deepmir_len", type=int, default=None,
                         help="Center-trim DeepMir inputs to this length (e.g. 100).")
-    parser.add_argument("--mirdnn_use_fold", action="store_true",
-                        help="Use structure/mfe columns to build mirdnn fold input (skip RNAfold).")
+    parser.add_argument(
+        "--mirdnn_use_fold",
+        action="store_true",
+        default=True,
+        help="Use structure/mfe columns to build mirdnn fold input (skip internal RNAfold). Default: True. Use --no_mirdnn_use_fold to disable.",
+    )
+    parser.add_argument(
+        "--no_mirdnn_use_fold",
+        action="store_true",
+        help="Force mirdnn to run RNAfold internally instead of using pre-computed structure/mfe columns.",
+    )
     parser.add_argument("--cpu_tools", nargs="+", default=[],
                         help="Tools to force on CPU even when GPU is enabled (dnnpremir is always CPU).")
     parser.add_argument("--no_gpu", action="store_true",
                         help="Disable GPU usage (default: try GPU for all tools).")
-    parser.add_argument("--shard_size", type=int, default=None,
-                        help="Rows per shard for large datasets (e.g. 10000).")
+    parser.add_argument(
+        "--shard_size",
+        type=int,
+        default=None,
+        help="Controls CSV read chunk size for memory management. Tool invocation now always uses the full merged input with automatic bisection fallback on OOM.",
+    )
     parser.add_argument("--shard_root", default="benchmark/output/tool_eval_shards",
                         help="Root directory for shard files (default: benchmark/output/tool_eval_shards).")
     parser.add_argument("--reuse_shards", action="store_true",
@@ -798,6 +1044,7 @@ def main():
     parser.add_argument("--tool_args", default=None,
                         help="JSON file mapping tool->list of extra args, e.g. {'mirdnn':['--device','cpu']}")
     args = parser.parse_args()
+    args.mirdnn_use_fold = args.mirdnn_use_fold and not args.no_mirdnn_use_fold
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -926,54 +1173,115 @@ def main():
                     "mustard_cfg": mustard_cfg,
                 })
 
+            fasta_path = os.path.join(dataset_dir, "input.fa")
+            seq_order = []
+            seq_lengths = {}
+            with open(fasta_path, "w") as merged_fa:
+                for shard_info in shard_infos:
+                    with open(shard_info["fasta"]) as shard_fa:
+                        shutil.copyfileobj(shard_fa, merged_fa)
+                    seq_order.extend(shard_info["seq_order"])
+                    seq_lengths.update(shard_info["seq_lengths"])
+
+            deepmir_fasta = None
+            if "deepmir" in args.tools and args.deepmir_len:
+                deepmir_fasta = os.path.join(dataset_dir, f"input_deepmir_{args.deepmir_len}.fa")
+                with open(deepmir_fasta, "w") as merged_deepmir:
+                    for shard_info in shard_infos:
+                        if shard_info["deepmir_fasta"] and os.path.exists(shard_info["deepmir_fasta"]):
+                            with open(shard_info["deepmir_fasta"]) as shard_deepmir:
+                                shutil.copyfileobj(shard_deepmir, merged_deepmir)
+
+            mirdnn_fold = None
+            if "mirdnn" in args.tools and args.mirdnn_use_fold:
+                mirdnn_fold = os.path.join(dataset_dir, "input_mirdnn.fold")
+                with open(mirdnn_fold, "w") as merged_fold:
+                    for shard_info in shard_infos:
+                        if shard_info["mirdnn_fold"] and os.path.exists(shard_info["mirdnn_fold"]):
+                            with open(shard_info["mirdnn_fold"]) as shard_fold:
+                                shutil.copyfileobj(shard_fold, merged_fold)
+
+            mustard_cfg = None
+            if "mustard" in args.tools:
+                bed_path = os.path.join(dataset_dir, "mustard", "targets.bed")
+                os.makedirs(os.path.dirname(bed_path), exist_ok=True)
+                chrom_set = set()
+                with open(bed_path, "w") as merged_bed:
+                    for shard_info in shard_infos:
+                        shard_cfg = shard_info["mustard_cfg"]
+                        if not shard_cfg:
+                            continue
+                        chrom_set.update(c for c in shard_cfg["chrom_list"].split(",") if c)
+                        with open(shard_cfg["bed"]) as shard_bed:
+                            shutil.copyfileobj(shard_bed, merged_bed)
+                chrom_list = ",".join(sorted(chrom_set))
+                win_size = args.mustard_win_size if args.mustard_win_size else (max(seq_lengths.values()) if seq_lengths else 200)
+                mustard_cfg = {
+                    "bed": bed_path,
+                    "chrom_list": chrom_list,
+                    "genome": args.mustard_genome,
+                    "cons_dir": args.mustard_cons_dir,
+                    "model": args.mustard_model,
+                    "input_mode": args.mustard_input_mode,
+                    "threads": args.mustard_threads,
+                    "win_size": win_size,
+                    "step": win_size,
+                    "model_dir": "eval",
+                }
+
+            if set(seq_order) != label_ids:
+                raise RuntimeError("Merged FASTA IDs differ from label IDs in shard mode.")
+
             for tool_idx, tool in enumerate(args.tools, start=1):
                 print(f"[{dataset_idx}/{total_datasets}] {dataset_name} -> [{tool_idx}/{total_tools}] {tool}")
                 sys.stdout.flush()
+                tool_out_dir = os.path.join(dataset_dir, tool)
                 status = "ok"
                 note = ""
-                preds = {}
 
                 try:
-                    for shard_info in shard_infos:
-                        shard_dir = shard_info["shard_dir"]
-                        tool_out_dir = os.path.join(shard_dir, tool)
-                        if not args.skip_run or not os.path.exists(tool_out_dir):
-                            extra_args = tool_args.get(tool, [])
-                            tool_use_gpu = use_gpu and tool not in cpu_tools
-                            if tool == "mire2e":
-                                if args.mire2e_max_records is not None:
-                                    extra_args += ["--max_records", str(args.mire2e_max_records)]
-                                if tool_use_gpu:
-                                    extra_args = ensure_device_arg(extra_args, "cuda:0")
-                            if tool == "mirdnn" and tool_use_gpu:
+                    if not args.skip_run or not os.path.exists(tool_out_dir):
+                        extra_args = list(tool_args.get(tool, []))
+                        tool_use_gpu = use_gpu and tool not in cpu_tools
+                        if tool == "mire2e":
+                            if args.mire2e_max_records is not None:
+                                extra_args += ["--max_records", str(args.mire2e_max_records)]
+                            if tool_use_gpu:
                                 extra_args = ensure_device_arg(extra_args, "cuda:0")
-                            tool_fasta = shard_info["deepmir_fasta"] if (tool == "deepmir" and shard_info["deepmir_fasta"]) else shard_info["fasta"]
-                            run_tool(
-                                tool,
-                                tool_fasta,
-                                tool_out_dir,
-                                extra_args,
-                                args.runner,
-                                repo_root,
-                                shard_info["mustard_cfg"],
-                                quiet=not args.verbose,
-                                mirdnn_fold=shard_info["mirdnn_fold"] if tool == "mirdnn" else None,
-                                use_gpu=tool_use_gpu,
-                            )
-
-                        shard_preds = load_predictions(
+                        if tool == "mirdnn" and tool_use_gpu:
+                            extra_args = ensure_device_arg(extra_args, "cuda:0")
+                        tool_fasta = deepmir_fasta if (tool == "deepmir" and deepmir_fasta) else fasta_path
+                        preds = run_tool_with_fallback(
+                            tool,
+                            tool_fasta,
+                            tool_out_dir,
+                            seq_order=seq_order,
+                            seq_lengths=seq_lengths,
+                            extra_args=extra_args,
+                            runner=args.runner,
+                            repo_root=repo_root,
+                            mustard_cfg=mustard_cfg,
+                            quiet=not args.verbose,
+                            mirdnn_fold=mirdnn_fold if tool == "mirdnn" else None,
+                            use_gpu=tool_use_gpu,
+                            mire2e_agg=args.mire2e_agg,
+                            mire2e_topk=args.mire2e_topk,
+                            mire2e_length=mire2e_length,
+                            mire2e_step=mire2e_step,
+                        )
+                    else:
+                        preds = load_predictions(
                             tool,
                             tool_out_dir,
-                            seq_order=shard_info["seq_order"],
-                            seq_lengths=shard_info["seq_lengths"],
+                            seq_order=seq_order,
+                            seq_lengths=seq_lengths,
                             tool_args=tool_args,
                             mire2e_agg=args.mire2e_agg,
                             mire2e_topk=args.mire2e_topk,
                             mire2e_length=mire2e_length,
                             mire2e_step=mire2e_step,
-                            mustard_cfg=shard_info["mustard_cfg"],
+                            mustard_cfg=mustard_cfg,
                         )
-                        preds.update(shard_preds)
 
                     pred_ids = set(preds.keys())
                     common_ids = list(label_ids & pred_ids)
@@ -1117,7 +1425,7 @@ def main():
 
             try:
                 if not args.skip_run or not os.path.exists(tool_out_dir):
-                    extra_args = tool_args.get(tool, [])
+                    extra_args = list(tool_args.get(tool, []))
                     tool_use_gpu = use_gpu and tool not in cpu_tools
                     if tool == "mire2e":
                         if args.mire2e_max_records is not None:
@@ -1127,31 +1435,37 @@ def main():
                     if tool == "mirdnn" and tool_use_gpu:
                         extra_args = ensure_device_arg(extra_args, "cuda:0")
                     tool_fasta = deepmir_fasta if (tool == "deepmir" and deepmir_fasta) else fasta_path
-                    run_tool(
+                    preds = run_tool_with_fallback(
                         tool,
                         tool_fasta,
                         tool_out_dir,
-                        extra_args,
-                        args.runner,
-                        repo_root,
-                        mustard_cfg,
+                        seq_order=seq_order,
+                        seq_lengths=seq_lengths,
+                        extra_args=extra_args,
+                        runner=args.runner,
+                        repo_root=repo_root,
+                        mustard_cfg=mustard_cfg,
                         quiet=not args.verbose,
                         mirdnn_fold=mirdnn_fold if tool == "mirdnn" else None,
                         use_gpu=tool_use_gpu,
+                        mire2e_agg=args.mire2e_agg,
+                        mire2e_topk=args.mire2e_topk,
+                        mire2e_length=mire2e_length,
+                        mire2e_step=mire2e_step,
                     )
-
-                preds = load_predictions(
-                    tool,
-                    tool_out_dir,
-                    seq_order=seq_order,
-                    seq_lengths=seq_lengths,
-                    tool_args=tool_args,
-                    mire2e_agg=args.mire2e_agg,
-                    mire2e_topk=args.mire2e_topk,
-                    mire2e_length=mire2e_length,
-                    mire2e_step=mire2e_step,
-                    mustard_cfg=mustard_cfg,
-                )
+                else:
+                    preds = load_predictions(
+                        tool,
+                        tool_out_dir,
+                        seq_order=seq_order,
+                        seq_lengths=seq_lengths,
+                        tool_args=tool_args,
+                        mire2e_agg=args.mire2e_agg,
+                        mire2e_topk=args.mire2e_topk,
+                        mire2e_length=mire2e_length,
+                        mire2e_step=mire2e_step,
+                        mustard_cfg=mustard_cfg,
+                    )
                 pred_ids = set(preds.keys())
                 common_ids = list(label_ids & pred_ids)
 

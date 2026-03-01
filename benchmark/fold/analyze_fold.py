@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import math
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
 
 
 def parse_window_id(window_id):
@@ -50,10 +50,6 @@ with open(args.csv, "w", newline="") as f:
     writer.writerows(data)
 
 energies = np.array(energies)
-n = len(energies)
-std = energies.std(ddof=1)
-bandwidth = 1.06 * std * (n ** (-0.2))
-
 mean = energies.mean()
 sd = energies.std(ddof=1)
 mean_minus_sd = mean - sd
@@ -65,9 +61,8 @@ span = x_max - x_min
 pad = 0.1 * span
 xs = np.linspace(x_min - pad, x_max + pad, 200)
 
-diff = (xs[:, None] - energies[None, :]) / bandwidth
-ys = np.exp(-0.5 * diff ** 2).sum(axis=1)
-ys /= (n * bandwidth * math.sqrt(2.0 * math.pi))
+kde_obj = gaussian_kde(energies, bw_method="silverman")
+ys = kde_obj(xs)
 
 plt.figure(figsize=(8, 5))
 plt.plot(xs, ys, color="tab:blue", linewidth=2)

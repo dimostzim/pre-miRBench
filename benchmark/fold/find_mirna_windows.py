@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import math
 import os
 from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
 
 
 def parse_window_id(window_id):
@@ -32,20 +32,23 @@ def load_mirnas(bed_file):
 
 def load_windows_by_chr(csv_file):
     windows_by_chr = defaultdict(list)
+    window_index = {}
     with open(csv_file) as f:
         reader = csv.DictReader(f)
         for row in reader:
             window_id = row['window_id']
             chr_part, start, end = parse_window_id(window_id)
-            windows_by_chr[chr_part].append({
+            window_obj = {
                 'window_id': window_id,
                 'start': start,
                 'end': end,
                 'row': row
-            })
+            }
+            windows_by_chr[chr_part].append(window_obj)
+            window_index[window_id] = window_obj
     for chr_name in windows_by_chr:
         windows_by_chr[chr_name].sort(key=lambda w: w['start'])
-    return windows_by_chr
+    return windows_by_chr, window_index
 
 
 def find_containing_windows(mirna, windows_by_chr):
@@ -76,7 +79,7 @@ if not args.output_collapsed:
 os.makedirs(os.path.dirname(args.output_collapsed), exist_ok=True)
 
 mirnas = load_mirnas(args.bed)
-windows_by_chr = load_windows_by_chr(args.csv)
+windows_by_chr, window_index = load_windows_by_chr(args.csv)
 
 window_to_mirnas = defaultdict(list)
 mirna_window_counts = defaultdict(int)
@@ -89,14 +92,11 @@ for mirna in mirnas:
 
 output_rows = []
 for window_id, mirna_names in window_to_mirnas.items():
-    chr_part, _, _ = parse_window_id(window_id)
-    for window in windows_by_chr[chr_part]:
-        if window['window_id'] == window_id:
-            row = window['row'].copy()
-            row['contained_mirnas'] = ';'.join(mirna_names)
-            row['num_mirnas'] = len(mirna_names)
-            output_rows.append(row)
-            break
+    window = window_index[window_id]
+    row = window['row'].copy()
+    row['contained_mirnas'] = ';'.join(mirna_names)
+    row['num_mirnas'] = len(mirna_names)
+    output_rows.append(row)
 
 collapsed_rows = []
 for mirna in mirnas:
@@ -150,10 +150,6 @@ with open(args.summary, 'w') as f:
     f.write(f"max: {max(counts)}\n")
 
 energies = np.array([float(row['mfe']) for row in output_rows])
-n = len(energies)
-std = energies.std(ddof=1)
-bandwidth = 1.06 * std * (n ** (-0.2))
-
 mean = energies.mean()
 sd = energies.std(ddof=1)
 mean_minus_sd = mean - sd
@@ -165,9 +161,8 @@ span = x_max - x_min
 pad = 0.1 * span
 xs = np.linspace(x_min - pad, x_max + pad, 200)
 
-diff = (xs[:, None] - energies[None, :]) / bandwidth
-ys = np.exp(-0.5 * diff ** 2).sum(axis=1)
-ys /= (n * bandwidth * math.sqrt(2.0 * math.pi))
+kde_obj = gaussian_kde(energies, bw_method="silverman")
+ys = kde_obj(xs)
 
 plt.figure(figsize=(8, 5))
 plt.plot(xs, ys, color="tab:blue", linewidth=2)
