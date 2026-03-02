@@ -81,5 +81,3 @@ model logic.
   - Distribution matching (MFE/dinucleotide/structure) is applied only to the
     1:1 datasets.
 
-If you want this document expanded (e.g., exact command lines or version tags),
-let me know.
