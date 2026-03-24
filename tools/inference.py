@@ -3,13 +3,11 @@ import argparse
 import os
 import subprocess
 import yaml
-import shutil
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
-    p.add_argument("--docker", action="store_true")
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     args = p.parse_args()
 
@@ -23,22 +21,13 @@ def main():
     output_dir = os.path.join(repo_root, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
 
-    if args.docker:
-        cmd = [
-            "docker", "run", "--rm", "--gpus", "all", "--platform", "linux/amd64",
-            "-v", f"{repo_root}:/work",
-            f"{args.tool}:latest"
-        ]
-        path_prefix = "/work/"
-        output_path = f"/work/results/{args.tool}/{args.output_name}"
-    else:
-        conda_exe = shutil.which("conda")
-        conda_base = os.path.dirname(os.path.dirname(conda_exe))
-        conda_python = os.path.join(conda_base, "envs", args.tool, "bin", "python")
-        tool_script = os.path.join(repo_root, "tools", args.tool, "inference.py")
-        cmd = [conda_python, tool_script]
-        path_prefix = ""
-        output_path = output_dir
+    cmd = [
+        "docker", "run", "--rm", "--gpus", "all",
+        "-v", f"{repo_root}:/work",
+        f"{args.tool}:latest"
+    ]
+    path_prefix = "/work/"
+    output_path = f"/work/results/{args.tool}/{args.output_name}"
 
     if args.tool == "mustard":
         cmd.extend(["--targetIntervals", f"{path_prefix}{config['targetIntervals']}"])
@@ -87,7 +76,8 @@ def main():
     elif args.tool == "deepmirgene":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
-        cmd.extend(["--model", f"{path_prefix}{config['model']}"])
+        if config.get("model"):
+            cmd.extend(["--model", f"{path_prefix}{config['model']}"])
 
     subprocess.check_call(cmd)
 
