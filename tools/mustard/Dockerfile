@@ -1,33 +1,37 @@
-# this is an old miniconda version with py2.7 support
-FROM continuumio/miniconda3:4.12.0
+FROM nvidia/cuda:11.2.2-cudnn8-runtime-ubuntu20.04
 
 ARG http_proxy
 ARG https_proxy
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 
-WORKDIR /opt/mustard
-
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget git ca-certificates && \
+    apt-get install -y --no-install-recommends wget ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
+
+RUN wget -q https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm /tmp/miniconda.sh
+ENV PATH="/opt/conda/bin:${PATH}"
+
+WORKDIR /opt/mustard
 
 COPY environment.yml .
 
-# normally miniconda supports mamba but this old version does not lol. so we install mamba for faster solving
-# because building a linux image on ARM Mac and installing old packages is painfully slow.
-
-# currently we only do cpu version only
-
-RUN conda install -n base -c conda-forge mamba -y && \
-    mamba env create -f environment.yml && \
+RUN mamba env create \
+    -f environment.yml && \
     conda clean -afy
+
 ENV PATH="/opt/conda/envs/mustard/bin:${PATH}"
 
-# mustard source and pretrained models
 RUN git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src
-RUN mkdir -p data/models
 
+# Patch apply_CNN.py: tf.Session -> tf.compat.v1.Session (TF 1.x API removed in TF 2.x)
+RUN sed -i 's/tf\.Session(/tf.compat.v1.Session(/g' \
+    mustard_src/src/utilities/python/apply_CNN.py
+
+RUN mkdir -p data/models
 RUN for model in MuStARD-mirS MuStARD-mirF MuStARD-mirSF MuStARD-mirSC MuStARD-mirFC MuStARD-mirSFC MuStARD-mirSFC-U; do \
       mkdir -p data/models/${model}; \
       wget -O data/models/${model}/CNNonRaw.hdf5 "https://gitlab.com/RBP_Bioinformatics/mustard_paper/-/raw/master/pretrained_models/${model}/CNNonRaw.hdf5"; \
