@@ -24,7 +24,7 @@ See `download/README.md` for data download scripts.
 Runs RNAfold on sliding windows (default: 200bp, step 50bp) across sequences.
 
 ```bash
-python fold/run_folding.py --input data/..
+python fold/run_folding.py --input data/chr14.fa
 ```
 
 **Parameters:**
