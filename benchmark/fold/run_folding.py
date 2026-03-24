@@ -19,6 +19,8 @@ parser.add_argument("--single_strand", action="store_true", help="Only forward s
 parser.add_argument("--max_repeat_frac", type=float, default=0.1,
                     help="Max fraction of masked bases to allow (default: 0.1)")
 args = parser.parse_args()
+args.input = os.path.abspath(args.input)
+args.output = os.path.abspath(args.output)
 
 os.makedirs(args.output, exist_ok=True)
 
