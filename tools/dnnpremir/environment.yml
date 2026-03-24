@@ -4,13 +4,12 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - python=3.6
-  - numpy
-  - cudatoolkit=10.0
-  - cudnn=7.6
+  - python=3.8
+  - numpy>=1.20,<1.24
   - viennarna
   - pip
   - pip:
-      - tensorflow-gpu==1.14.0
-      - keras==2.2.4
-      - h5py==2.10.0
+      - tensorflow==2.6.0
+      - keras==2.6.0
+      - h5py
+      - protobuf==3.20.*

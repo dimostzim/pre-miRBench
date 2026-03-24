@@ -46,7 +46,7 @@ def main():
     ]
 
     env = os.environ.copy()
-    env.setdefault("KERAS_BACKEND", "theano")
+    env.setdefault("KERAS_BACKEND", "tensorflow")
 
     try:
         subprocess.check_call(cmd, cwd=inference_dir, env=env)

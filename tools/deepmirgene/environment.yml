@@ -2,23 +2,22 @@ name: deepmirgene
 channels:
   - conda-forge
   - bioconda
+  - defaults
 dependencies:
-  - python=3.7
-  - numpy=1.16.6
+  - python=3.8
+  - numpy>=1.20,<1.24
   - biopython
   - scikit-learn
   - hdf5
   - make
   - perl
   - pkg-config
-  - compilers
-  - mkl
-  - mkl-service
-  - theano=1.0.5
-  - cudatoolkit=10.0
-  - cudnn=7.6
-  - pygpu
+  - viennarna
+  - cudatoolkit=11.2
+  - cudnn=8.1
   - pip
   - pip:
-      - keras==2.2.4
-      - h5py==2.10.0
+      - tensorflow==2.6.0
+      - keras==2.6.0
+      - h5py
+      - protobuf==3.20.*

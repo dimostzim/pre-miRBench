@@ -3,8 +3,10 @@ channels:
   - conda-forge
   - bioconda
   - anaconda
+  - defaults
 dependencies:
-  - python=2.7
+  - python=3.8
+  - numpy>=1.20,<1.24
   - perl
   - perl-set-intervaltree
   - perl-parallel-forkmanager
@@ -13,11 +15,9 @@ dependencies:
   - bedtools
   - r-base
   - r-ggplot2
-  - cudatoolkit=10.0
-  - cudnn=7.6
   - pip
   - pip:
-      - Cython<3.0
-      - grpcio==1.27.2
-      - tensorflow-gpu==1.15
-      - keras==2.3.1
+      - tensorflow==2.6.0
+      - keras==2.6.0
+      - h5py
+      - protobuf==3.20.*
