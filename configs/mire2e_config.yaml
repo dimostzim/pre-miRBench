@@ -1,11 +1,11 @@
 # miRe2e Configuration
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
+input: benchmark/prepared_inputs/balanced_collapsed.fa
 
 # Optional parameters (defaults shown)
 device: cuda          # default: cpu
 pretrained: hsa       # default: hsa
-length: 100           # default: 100
-step: 20              # default: 20
+length: 200           # default: 100
+step: 200             # default: 20
 batch_size: 4096      # default: 4096

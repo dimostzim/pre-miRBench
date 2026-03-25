@@ -1,7 +1,7 @@
 # MuStARD Configuration
 
 # Required parameters
-targetIntervals: benchmark/data/mustard_smoke_test.bed
+targetIntervals: benchmark/prepared_inputs/balanced_collapsed.bed
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 
@@ -16,4 +16,4 @@ staticPredFlag: 1          # default: 0
 inputMode: sequence        # default: sequence,RNAfold,conservation
 threads: 10                # default: 10
 modelDirName: results      # default: results
-intermDir: results/mustard_intermediate            # default: same
+intermDir: results/mustard_intermediate  # default: same

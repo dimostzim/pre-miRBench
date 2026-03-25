@@ -1,7 +1,7 @@
 # deepMiRGene Configuration
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
+input: benchmark/prepared_inputs/balanced_collapsed.fa
 
 # Optional parameters (defaults shown)
 model: null            # default: use bundled model (in deepmirgene_src/inference/model/new_test.hdf5)

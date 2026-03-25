@@ -1,10 +1,10 @@
 # mirDNN Configuration
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
+input: benchmark/prepared_inputs/balanced_collapsed.fa
 
 # Optional parameters (defaults shown)
 model: animal           # default: animal (options: animal, plants)
 device: cuda:0          # default: cpu
-seq_length: 160         # default: 160
+seq_length: 200         # default: 160
 batch_size: 1024        # default: 1024
