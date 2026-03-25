@@ -108,7 +108,8 @@ def main():
     elif args.tool == "dnnpremir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
-        cmd.extend(["--seq_length", str(config["seq_length"])])
+        if "seq_length" in config and config["seq_length"] is not None:
+            cmd.extend(["--seq_length", str(config["seq_length"])])
 
     elif args.tool == "deepmir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])

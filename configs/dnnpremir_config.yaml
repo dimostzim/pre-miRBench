@@ -1,7 +1,4 @@
 # dnnPreMiR Configuration
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
-
-# Optional parameters (defaults shown)
-seq_length: 180         # default: 180 (fixed, sequences are truncated/padded)
+input: benchmark/prepared_inputs/balanced_collapsed.fa
