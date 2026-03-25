@@ -2,7 +2,50 @@
 import argparse
 import os
 import subprocess
-import yaml
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+
+def _parse_scalar(value):
+    value = value.strip()
+    if not value:
+        return ""
+    if value in {"null", "Null", "NULL", "~"}:
+        return None
+    if value in {"true", "True", "TRUE"}:
+        return True
+    if value in {"false", "False", "FALSE"}:
+        return False
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        return value[1:-1]
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
+def load_config(config_path):
+    if yaml is not None:
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+
+    config = {}
+    with open(config_path) as f:
+        for raw_line in f:
+            line = raw_line.split("#", 1)[0].strip()
+            if not line or ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            config[key.strip()] = _parse_scalar(value)
+    return config
 
 
 def main():
@@ -15,8 +58,7 @@ def main():
     repo_root = os.path.dirname(tools_dir)
     config_path = os.path.join(repo_root, "configs", f"{args.tool}_config.yaml")
 
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
+    config = load_config(config_path)
 
     output_dir = os.path.join(repo_root, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
