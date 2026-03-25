@@ -26,7 +26,11 @@ RUN mamba env create \
 ENV PATH="/opt/conda/envs/deepmirgene/bin:${PATH}"
 ENV KERAS_BACKEND="tensorflow"
 
+COPY patch_upstream.py ./
+
 RUN git clone https://github.com/eleventh83/deepMiRGene.git deepmirgene_src
+
+RUN python /opt/deepmirgene/patch_upstream.py
 
 COPY inference.py ./
 

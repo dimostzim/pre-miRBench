@@ -5,9 +5,9 @@ channels:
   - defaults
 dependencies:
   - python=3.8
-  - numpy>=1.20,<1.24
+  - numpy=1.19.5
   - biopython
-  - scikit-learn
+  - scikit-learn=0.24.*
   - hdf5
   - make
   - perl
