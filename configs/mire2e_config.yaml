@@ -1,10 +1,10 @@
 # miRe2e Configuration
 
 # Required parameters
-input: tools/mire2e/data/examples/chr19_13836201_13836660_true.fa
+input: benchmark/data/tool_smoke_test.fa
 
 # Optional parameters (defaults shown)
-device: cpu           # default: cpu
+device: cuda          # default: cpu
 pretrained: hsa       # default: hsa
 length: 100           # default: 100
 step: 20              # default: 20
