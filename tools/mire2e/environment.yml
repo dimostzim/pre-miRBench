@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.9
+  - numpy<2
   - pip
   - pip:
       - biopython>=1.78
