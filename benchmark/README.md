@@ -89,6 +89,74 @@ The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positi
 - MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
 - this benchmark is a candidate-level collapsed balanced benchmark, not the full scan benchmark
 
+## Scan Benchmark
+
+The scan benchmark searches full `chr14` and evaluates recovered precursor loci:
+
+- implementation: `benchmark/scan_benchmark/`
+- search space: `benchmark/data/chr14.fa`
+- truth loci: `benchmark/data/hsa-precursors-no-v2.bed` filtered to `chr14`
+- default result prefix: `scan_chr14`
+
+This is one shared scan benchmark for all tools:
+
+- `mire2e` and `mustard` use native scan mode
+- `deepmir`, `deepmirgene`, `dnnpremir`, and `mirdnn` use externally generated sliding windows over `chr14`
+
+### Full Pipeline
+
+Prepare chunked scan inputs:
+
+```bash
+python benchmark/scan_benchmark/prepare_inputs.py
+```
+
+Run all tool wrappers chunk by chunk:
+
+```bash
+bash benchmark/scan_benchmark/run_tools.sh
+```
+
+Normalize raw scan outputs, merge positive windows into loci, and compute locus-level metrics:
+
+```bash
+python benchmark/scan_benchmark/evaluate_outputs.py
+```
+
+### Outputs
+
+- prepared inputs: `benchmark/prepared_inputs/scan_benchmark/`
+- raw tool outputs: `results/{tool}/scan_chr14/{chunk_id}/`
+- normalized window outputs: `benchmark/evaluated/scan_benchmark/{tool}.windows.csv`
+- merged locus outputs: `benchmark/evaluated/scan_benchmark/{tool}.loci.csv`
+- summary metrics: `benchmark/evaluated/scan_benchmark/metrics.csv`
+
+### Scan Preparation
+
+- chunk size defaults to `1,000,000` bp with `200` bp overlap for native scan tools
+- non-native scan windows use a global stride of `50` bp by default
+- external window sizes:
+  - `deepmir`: `200`
+  - `deepmirgene`: `200`
+  - `dnnpremir`: `180`
+  - `mirdnn`: `160`
+
+This benchmark is substantially heavier than the balanced benchmark. Start with `--tools` if you want to run only one or two tools first.
+
+### Scan Evaluation Notes
+
+- score threshold is fixed at `0.5`
+- positive windows are merged into loci when they overlap on the same strand
+- a predicted locus counts as a hit when it overlaps at least `50%` of a truth locus
+- each truth locus can be matched at most once
+- metrics are locus-level:
+  - `predicted_loci`
+  - `matched_truth_loci`
+  - `false_positive_loci`
+  - `precision_locus`
+  - `locus_recall`
+  - `fp_per_mb`
+
 ## Download Data
 
 See `download/README.md` for data download scripts.
