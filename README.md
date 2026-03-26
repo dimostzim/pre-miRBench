@@ -9,7 +9,6 @@ Pipeline for pre-miRNA prediction: benchmark dataset creation, tool inference, a
   - `download/` - Data download scripts
   - `fold/` - RNA folding pipeline
   - `make_negative_set/` - Balanced negative sampling
-  - `models/` - Model training scripts
 - `tools/` - Pre-miRNA prediction tool wrappers
 - `configs/` - Tool configuration files
 
