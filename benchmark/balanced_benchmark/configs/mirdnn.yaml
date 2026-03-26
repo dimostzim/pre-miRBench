@@ -1,6 +1,6 @@
 # mirDNN collapsed 1:1 configuration
 
-input: benchmark/prepared_inputs/1_1_collapsed/mirdnn/1_1_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/mirdnn/balanced_benchmark.fa
 model: animal
 device: cuda:0
 seq_length: 160

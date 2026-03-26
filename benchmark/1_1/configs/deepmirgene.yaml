@@ -1,4 +1,0 @@
-# deepMiRGene collapsed 1:1 configuration
-
-input: benchmark/prepared_inputs/1_1_collapsed/deepmirgene/1_1_collapsed.fa
-model: null

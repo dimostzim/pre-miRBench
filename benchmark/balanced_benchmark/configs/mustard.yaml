@@ -1,6 +1,6 @@
 # MuStARD collapsed 1:1 configuration
 
-targetIntervals: benchmark/prepared_inputs/1_1_collapsed/mustard/1_1_collapsed.bed
+targetIntervals: benchmark/prepared_inputs/balanced_benchmark/mustard/balanced_benchmark.bed
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 chromList: chr14

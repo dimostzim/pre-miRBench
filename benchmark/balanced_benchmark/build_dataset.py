@@ -12,12 +12,12 @@ def run(cmd):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Explicitly rebuild the saved collapsed 1:1 chr14 source dataset from the folding and negative-sampling pipeline."
+        description="Explicitly rebuild the saved collapsed balanced chr14 source dataset from the folding and negative-sampling pipeline."
     )
     parser.add_argument("--genome", default="benchmark/data/chr14.fa")
     parser.add_argument("--truth-bed", default="benchmark/data/hsa-precursors-no-v2.bed")
-    parser.add_argument("--dataset-output", default="benchmark/1_1/datasets/1_1_collapsed.csv")
-    parser.add_argument("--work-dir", default="benchmark/tmp/1_1_collapsed_rebuild")
+    parser.add_argument("--dataset-output", default="benchmark/balanced_benchmark/datasets/balanced_benchmark.csv")
+    parser.add_argument("--work-dir", default="benchmark/tmp/balanced_benchmark_rebuild")
     parser.add_argument("--chr", default="chr14")
     parser.add_argument("--window", type=int, default=200)
     parser.add_argument("--step", type=int, default=50)
@@ -89,7 +89,7 @@ def main():
         "--nonoverlap_seed", str(args.nonoverlap_seed),
     ])
 
-    print(f"1_1 source dataset: {dataset_output}")
+    print(f"balanced benchmark source dataset: {dataset_output}")
     print(f"rebuild work dir: {work_dir}")
 
 

@@ -1,6 +1,6 @@
 # miRe2e collapsed 1:1 configuration
 
-input: benchmark/prepared_inputs/1_1_collapsed/mire2e/1_1_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/mire2e/balanced_benchmark.fa
 device: cuda
 pretrained: hsa
 length: 100

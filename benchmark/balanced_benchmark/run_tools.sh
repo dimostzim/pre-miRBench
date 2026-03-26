@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-prefix="${1:-1_1_collapsed}"
+prefix="${1:-balanced_benchmark}"
 shift || true
 
 if [[ $# -gt 0 ]]; then
@@ -15,5 +15,5 @@ for tool in "${tools[@]}"; do
   python tools/inference.py \
     --tool "$tool" \
     --output-name "$prefix" \
-    --config "benchmark/1_1/configs/${tool}.yaml"
+    --config "benchmark/balanced_benchmark/configs/${tool}.yaml"
 done

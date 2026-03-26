@@ -5,7 +5,7 @@ Pipeline for pre-miRNA prediction: benchmark dataset creation, tool inference, a
 ## Structure
 
 - `benchmark/` - Benchmarking pipeline
-  - `1_1/` - Collapsed 1:1 tool benchmark implementation and configs
+  - `balanced_benchmark/` - Collapsed balanced tool benchmark implementation and configs
   - `download/` - Data download scripts
   - `fold/` - RNA folding pipeline
   - `make_negative_set/` - Balanced negative sampling
@@ -15,7 +15,7 @@ Pipeline for pre-miRNA prediction: benchmark dataset creation, tool inference, a
 
 ## Documentation
 
-- `benchmark/README.md` - Benchmark pipeline, including the full collapsed `1_1` tool benchmark
-- `benchmark/1_1/COLLAPSE.md` - How collapsed positive windows are selected
+- `benchmark/README.md` - Benchmark pipeline, including the full collapsed balanced benchmark
+- `benchmark/balanced_benchmark/COLLAPSE.md` - How collapsed positive windows are selected
 - `benchmark/download/README.md` - Data download
 - `tools/README.md` - Tool benchmarking

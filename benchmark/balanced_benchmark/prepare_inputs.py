@@ -14,11 +14,11 @@ from tool_adapters import (
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Prepare collapsed 1:1 benchmark inputs for each tool using tool-specific sequence/interval lengths."
+        description="Prepare collapsed balanced benchmark inputs for each tool using tool-specific sequence/interval lengths."
     )
-    parser.add_argument("--input", default="benchmark/1_1/datasets/1_1_collapsed.csv", help="Saved collapsed 1:1 source dataset CSV")
-    parser.add_argument("--output-dir", default="benchmark/prepared_inputs/1_1_collapsed", help="Directory to write prepared tool inputs into")
-    parser.add_argument("--prefix", default="1_1_collapsed", help="Output prefix")
+    parser.add_argument("--input", default="benchmark/balanced_benchmark/datasets/balanced_benchmark.csv", help="Saved collapsed balanced benchmark source dataset CSV")
+    parser.add_argument("--output-dir", default="benchmark/prepared_inputs/balanced_benchmark", help="Directory to write prepared tool inputs into")
+    parser.add_argument("--prefix", default="balanced_benchmark", help="Output prefix")
     parser.add_argument("--tools", default="all", help="Comma-separated tool list or 'all'")
     parser.add_argument("--truth-bed", default="benchmark/data/hsa-precursors-no-v2.bed", help="BED file with target pre-miRNA coordinates")
     return parser.parse_args()

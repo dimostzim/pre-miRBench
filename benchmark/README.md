@@ -28,49 +28,49 @@ cd tools
 cd ..
 ```
 
-## Collapsed 1:1 Tool Benchmark
+## Balanced Benchmark
 
-The current end-to-end tool benchmark is the collapsed `1_1` dataset:
+The current end-to-end tool benchmark is the collapsed balanced dataset:
 
 - positives: one representative 200 nt window per pre-miRNA
 - negatives: matched 1:1 negatives
-- implementation: `benchmark/1_1/`
-- source dataset: `benchmark/1_1/datasets/1_1_collapsed.csv`
+- implementation: `benchmark/balanced_benchmark/`
+- source dataset: `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv`
 
 ### Full Pipeline
 
 Run the following commands from the repository root.
 
-If `benchmark/1_1/datasets/1_1_collapsed.csv` is missing, rebuild it once:
+If `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv` is missing, rebuild it once:
 
 ```bash
-python benchmark/1_1/build_dataset.py
+python benchmark/balanced_benchmark/build_dataset.py
 ```
 
 Prepare tool-specific inputs:
 
 ```bash
-python benchmark/1_1/prepare_inputs.py
+python benchmark/balanced_benchmark/prepare_inputs.py
 ```
 
 Run all tool wrappers:
 
 ```bash
-bash benchmark/1_1/run_tools.sh
+bash benchmark/balanced_benchmark/run_tools.sh
 ```
 
 Normalize outputs and compute shared label-based metrics:
 
 ```bash
-python benchmark/1_1/evaluate_outputs.py
+python benchmark/balanced_benchmark/evaluate_outputs.py
 ```
 
 ### Outputs
 
-- prepared inputs: `benchmark/prepared_inputs/1_1_collapsed/`
-- raw tool outputs: `results/{tool}/1_1_collapsed/`
-- normalized per-tool outputs: `benchmark/evaluated/1_1_collapsed/{tool}.csv`
-- summary metrics: `benchmark/evaluated/1_1_collapsed/metrics.csv`
+- prepared inputs: `benchmark/prepared_inputs/balanced_benchmark/`
+- raw tool outputs: `results/{tool}/balanced_benchmark/`
+- normalized per-tool outputs: `benchmark/evaluated/balanced_benchmark/{tool}.csv`
+- summary metrics: `benchmark/evaluated/balanced_benchmark/metrics.csv`
 
 ### Tool-Specific Prepared Inputs
 
@@ -87,7 +87,7 @@ The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positi
 
 - metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
 - MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
-- this benchmark is a candidate-level collapsed `1_1` benchmark, not the full scan benchmark
+- this benchmark is a candidate-level collapsed balanced benchmark, not the full scan benchmark
 
 ## Download Data
 
