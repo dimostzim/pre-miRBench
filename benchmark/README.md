@@ -10,6 +10,8 @@ Pre-miRNA prediction benchmark: RNA folding, dataset creation, tool-specific inp
 
 ## Setup
 
+Run the following commands from the repository root unless noted otherwise.
+
 ```bash
 conda env create -f benchmark/environment.yml
 conda activate benchmark
@@ -38,8 +40,6 @@ The current end-to-end tool benchmark is the collapsed balanced dataset:
 - source dataset: `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv`
 
 ### Full Pipeline
-
-Run the following commands from the repository root.
 
 If `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv` is missing, rebuild it once:
 
@@ -98,7 +98,7 @@ See `download/README.md` for data download scripts.
 Runs RNAfold on sliding windows (default: 200bp, step 50bp) across sequences.
 
 ```bash
-python fold/run_folding.py --input data/chr14.fa
+python benchmark/fold/run_folding.py --input benchmark/data/chr14.fa
 ```
 
 **Parameters:**
@@ -121,9 +121,9 @@ python fold/run_folding.py --input data/chr14.fa
 ## Find miRNA-Containing Windows
 
 ```bash
-python fold/find_mirna_windows.py \
+python benchmark/fold/find_mirna_windows.py \
   --csv output/fold_output/results.csv \
-  --bed download/data/cel-precursors-no-v2.bed \
+  --bed benchmark/data/hsa-precursors-no-v2.bed \
   --output output/fold_output/positives.csv \
   --output_collapsed output/fold_output/positives_collapsed.csv \
   --summary output/fold_output/summary.txt \
@@ -145,7 +145,7 @@ This step produces **four datasets**:
 Negative sampling matches MFE, dinucleotide, and structure distributions of positives **only for the 1:1 datasets** (`balanced.csv` and `balanced_collapsed.csv`). The imbalanced datasets use all negatives (no matching).
 
 ```bash
-python make_negative_set/sample_negatives.py \
+python benchmark/make_negative_set/sample_negatives.py \
   --positives output/fold_output/positives.csv \
   --positives_collapsed output/fold_output/positives_collapsed.csv \
   --all_windows output/fold_output/results.csv

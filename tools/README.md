@@ -13,43 +13,34 @@ Unified wrapper for benchmarking pre-miRNA prediction tools.
 
 ## Setup
 
-### Conda
+Build a tool image from the repository root:
 
 ```bash
+cd tools
 ./setup.sh --tool {tool}
+cd ..
 ```
 
-### Docker
+Download a tool's bundled smoke-test data if needed:
 
 ```bash
-./setup.sh --tool {tool} --docker
-```
-
-Download test data:
-
-```bash
-cd {tool}
+cd tools/{tool}
 ./download_test_data.sh
+cd ../..
 ```
 
 ## Run Inference
 
-### Conda Mode
+Run from the repository root:
 
 ```bash
-python inference.py --tool {tool} --output-name my_run
-```
-
-### Docker Mode
-
-```bash
-python inference.py --tool {tool} --docker --output-name my_run
+python tools/inference.py --tool {tool} --output-name my_run
 ```
 
 ## Configuration
 
-Edit `configs/{tool}_config.yaml` to set parameters.
+Edit `configs/{tool}_config.yaml` to set default parameters, or pass an explicit config file with `--config`.
 
 ## Results
 
-Results saved to `../results/{tool}/{output-name}/`.
+Results are written to `results/{tool}/{output-name}/`.
