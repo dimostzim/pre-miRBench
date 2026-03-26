@@ -42,6 +42,7 @@ def main():
         reader = csv.DictReader(src)
 
         meta_fieldnames = [
+            "record_id",
             "window_id",
             "chrom",
             "start",
@@ -58,8 +59,9 @@ def main():
         meta_writer = csv.DictWriter(meta_out, fieldnames=meta_fieldnames)
         meta_writer.writeheader()
 
-        for row in reader:
+        for row_index, row in enumerate(reader, start=1):
             window_id = row["window_id"]
+            record_id = f"{prefix}__{row_index:06d}"
             sequence = row["sequence"].strip().upper().replace("T", "U")
             chrom = row["chrom"]
             start = row["start"]
@@ -67,10 +69,11 @@ def main():
             strand = row.get("strand", ".")
             label = row.get("label", "")
 
-            fasta_out.write(f">{window_id}\n{sequence}\n")
-            bed_out.write(f"{chrom}\t{start}\t{end}\t{window_id}\t0\t{strand}\n")
+            fasta_out.write(f">{record_id}\n{sequence}\n")
+            bed_out.write(f"{chrom}\t{start}\t{end}\t{record_id}\t0\t{strand}\n")
 
             meta_row = {
+                "record_id": record_id,
                 "window_id": window_id,
                 "chrom": chrom,
                 "start": start,

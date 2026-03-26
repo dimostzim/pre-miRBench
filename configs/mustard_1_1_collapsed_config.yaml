@@ -1,0 +1,16 @@
+# MuStARD collapsed 1:1 configuration
+
+targetIntervals: benchmark/prepared_inputs/1_1_collapsed/mustard/1_1_collapsed.bed
+genome: benchmark/data/chr14.fa
+consDir: benchmark/data
+chromList: chr14
+model: MuStARD-mirS
+classNum: 2
+modelType: CNN
+winSize: 100
+step: 5
+staticPredFlag: 1
+inputMode: sequence
+threads: 10
+modelDirName: results
+intermDir: results/mustard_intermediate

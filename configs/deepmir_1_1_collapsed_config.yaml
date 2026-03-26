@@ -1,0 +1,4 @@
+# DeepMir collapsed 1:1 configuration
+
+input: benchmark/prepared_inputs/1_1_collapsed/deepmir/1_1_collapsed.fa
+model: fine_tuned_cnn

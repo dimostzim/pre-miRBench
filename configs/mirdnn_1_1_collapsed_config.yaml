@@ -1,0 +1,7 @@
+# mirDNN collapsed 1:1 configuration
+
+input: benchmark/prepared_inputs/1_1_collapsed/mirdnn/1_1_collapsed.fa
+model: animal
+device: cuda:0
+seq_length: 160
+batch_size: 1024

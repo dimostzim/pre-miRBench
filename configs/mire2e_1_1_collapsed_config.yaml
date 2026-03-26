@@ -1,0 +1,8 @@
+# miRe2e collapsed 1:1 configuration
+
+input: benchmark/prepared_inputs/1_1_collapsed/mire2e/1_1_collapsed.fa
+device: cuda
+pretrained: hsa
+length: 100
+step: 20
+batch_size: 4096
