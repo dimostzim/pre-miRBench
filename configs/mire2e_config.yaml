@@ -6,6 +6,6 @@ input: benchmark/prepared_inputs/balanced_collapsed.fa
 # Optional parameters (defaults shown)
 device: cuda          # default: cpu
 pretrained: hsa       # default: hsa
-length: 200           # default: 100
-step: 200             # default: 20
+length: 100           # keep pretrained-compatible window size; changing this can break model geometry
+step: 20              # keep pretrained-compatible scan stride for the bundled model
 batch_size: 4096      # default: 4096

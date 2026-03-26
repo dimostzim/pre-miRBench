@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import os
+import shutil
 import subprocess
 
 try:
@@ -52,22 +53,63 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
+    p.add_argument("--config", help="Optional explicit config file path; defaults to configs/<tool>_config.yaml")
     args = p.parse_args()
 
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(tools_dir)
-    config_path = os.path.join(repo_root, "configs", f"{args.tool}_config.yaml")
+    if args.config:
+        config_path = os.path.abspath(args.config)
+    else:
+        config_path = os.path.join(repo_root, "configs", f"{args.tool}_config.yaml")
 
     config = load_config(config_path)
 
     output_dir = os.path.join(repo_root, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
+    tool_home_dir = os.path.join(repo_root, "results", args.tool, "_home")
+    tool_cache_dir = os.path.join(tool_home_dir, ".cache")
+    os.makedirs(tool_home_dir, exist_ok=True)
+    os.makedirs(tool_cache_dir, exist_ok=True)
 
     cmd = [
         "docker", "run", "--rm", "--gpus", "all",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "-e", f"HOME=/work/results/{args.tool}/_home",
+        "-e", f"XDG_CACHE_HOME=/work/results/{args.tool}/_home/.cache",
         "-v", f"{repo_root}:/work",
-        f"{args.tool}:latest"
     ]
+
+    if args.tool == "deepmir":
+        deepmir_user_data_dir = os.path.join(repo_root, "results", "deepmir", "_user_data")
+        os.makedirs(deepmir_user_data_dir, exist_ok=True)
+        cmd.extend(["-v", f"{deepmir_user_data_dir}:/opt/deepmir/deepmir_src/user_data"])
+    elif args.tool == "deepmirgene":
+        deepmirgene_results_dir = os.path.join(repo_root, "results", "deepmirgene", "_scratch_results")
+        os.makedirs(deepmirgene_results_dir, exist_ok=True)
+        cmd.extend(["-v", f"{deepmirgene_results_dir}:/opt/deepmirgene/deepmirgene_src/inference/results"])
+    elif args.tool == "dnnpremir":
+        dnnpremir_temp_dir = os.path.join(repo_root, "results", "dnnpremir", "_temp")
+        os.makedirs(dnnpremir_temp_dir, exist_ok=True)
+        cmd.extend(["-v", f"{dnnpremir_temp_dir}:/opt/dnnpremir/dnnpremir_src/temp"])
+    elif args.tool == "mire2e":
+        checkpoint_dir = os.path.join(tool_cache_dir, "torch", "hub", "checkpoints")
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        local_model_dir = os.path.join(repo_root, "tools", "mire2e", "mire2e_src", "models")
+        for filename in (
+            "structure-hsa.pkl",
+            "mfe-hsa.pkl",
+            "predictor-hsa.pkl",
+            "structure.pkl",
+            "mfe.pkl",
+            "predictor.pkl",
+        ):
+            source = os.path.join(local_model_dir, filename)
+            target = os.path.join(checkpoint_dir, filename)
+            if os.path.exists(source) and not os.path.exists(target):
+                shutil.copy2(source, target)
+
+    cmd.append(f"{args.tool}:latest")
     path_prefix = "/work/"
     output_path = f"/work/results/{args.tool}/{args.output_name}"
 
