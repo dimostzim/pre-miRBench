@@ -16,7 +16,7 @@ def parse_args():
     )
     parser.add_argument("--genome", default="benchmark/data/chr14.fa")
     parser.add_argument("--truth-bed", default="benchmark/data/hsa-precursors-no-v2.bed")
-    parser.add_argument("--dataset-output", default="benchmark/datasets/1_1_collapsed.csv")
+    parser.add_argument("--dataset-output", default="benchmark/1_1/datasets/1_1_collapsed.csv")
     parser.add_argument("--work-dir", default="benchmark/tmp/1_1_collapsed_rebuild")
     parser.add_argument("--chr", default="chr14")
     parser.add_argument("--window", type=int, default=200)
@@ -30,7 +30,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     dataset_output = (repo_root / args.dataset_output).resolve()
     work_dir = (repo_root / args.work_dir).resolve()
     fold_dir = work_dir / "fold_output"

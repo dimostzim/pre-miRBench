@@ -15,5 +15,5 @@ for tool in "${tools[@]}"; do
   python tools/inference.py \
     --tool "$tool" \
     --output-name "$prefix" \
-    --config "configs/${tool}_${prefix}_config.yaml"
+    --config "benchmark/1_1/configs/${tool}.yaml"
 done

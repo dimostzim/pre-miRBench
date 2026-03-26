@@ -16,7 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Prepare collapsed 1:1 benchmark inputs for each tool using tool-specific sequence/interval lengths."
     )
-    parser.add_argument("--input", default="benchmark/datasets/1_1_collapsed.csv", help="Saved collapsed 1:1 source dataset CSV")
+    parser.add_argument("--input", default="benchmark/1_1/datasets/1_1_collapsed.csv", help="Saved collapsed 1:1 source dataset CSV")
     parser.add_argument("--output-dir", default="benchmark/prepared_inputs/1_1_collapsed", help="Directory to write prepared tool inputs into")
     parser.add_argument("--prefix", default="1_1_collapsed", help="Output prefix")
     parser.add_argument("--tools", default="all", help="Comma-separated tool list or 'all'")

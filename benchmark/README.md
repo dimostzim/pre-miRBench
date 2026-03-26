@@ -34,34 +34,35 @@ The current end-to-end tool benchmark is the collapsed `1_1` dataset:
 
 - positives: one representative 200 nt window per pre-miRNA
 - negatives: matched 1:1 negatives
-- source dataset: `benchmark/datasets/1_1_collapsed.csv`
+- implementation: `benchmark/1_1/`
+- source dataset: `benchmark/1_1/datasets/1_1_collapsed.csv`
 
 ### Full Pipeline
 
 Run the following commands from the repository root.
 
-If `benchmark/datasets/1_1_collapsed.csv` is missing, rebuild it once:
+If `benchmark/1_1/datasets/1_1_collapsed.csv` is missing, rebuild it once:
 
 ```bash
-python benchmark/build_1_1_dataset.py
+python benchmark/1_1/build_dataset.py
 ```
 
 Prepare tool-specific inputs:
 
 ```bash
-python benchmark/prepare_1_1_inputs.py
+python benchmark/1_1/prepare_inputs.py
 ```
 
 Run all tool wrappers:
 
 ```bash
-bash benchmark/run_1_1_tools.sh
+bash benchmark/1_1/run_tools.sh
 ```
 
 Normalize outputs and compute shared label-based metrics:
 
 ```bash
-python benchmark/evaluate_1_1_outputs.py
+python benchmark/1_1/evaluate_outputs.py
 ```
 
 ### Outputs

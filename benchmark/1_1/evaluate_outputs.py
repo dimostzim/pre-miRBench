@@ -11,7 +11,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Evaluate collapsed 1:1 tool outputs with label-based metrics shared by every tool."
     )
-    parser.add_argument("--prepared-dir", default="benchmark/prepared_inputs/1_1_collapsed", help="Directory created by prepare_1_1_inputs.py")
+    parser.add_argument("--prepared-dir", default="benchmark/prepared_inputs/1_1_collapsed", help="Directory created by benchmark/1_1/prepare_inputs.py")
     parser.add_argument("--results-dir", default="results", help="Directory containing tool outputs")
     parser.add_argument("--output-dir", default="benchmark/evaluated/1_1_collapsed", help="Directory to write normalized outputs and metrics into")
     parser.add_argument("--prefix", default="1_1_collapsed", help="Dataset/output prefix, e.g. 1_1_collapsed")
