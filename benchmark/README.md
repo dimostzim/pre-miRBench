@@ -1,6 +1,6 @@
 # Benchmark Pipeline
 
-Pre-miRNA prediction benchmark: RNA folding, balanced dataset creation, and model training.
+Pre-miRNA prediction benchmark: RNA folding, dataset creation, tool-specific input preparation, and evaluation.
 
 ## Requirements
 
@@ -11,9 +11,82 @@ Pre-miRNA prediction benchmark: RNA folding, balanced dataset creation, and mode
 ## Setup
 
 ```bash
-conda env create -f environment.yml
+conda env create -f benchmark/environment.yml
 conda activate benchmark
 ```
+
+Build the tool Docker images once before running the tool benchmark:
+
+```bash
+cd tools
+./setup.sh --tool deepmir
+./setup.sh --tool deepmirgene
+./setup.sh --tool dnnpremir
+./setup.sh --tool mirdnn
+./setup.sh --tool mire2e
+./setup.sh --tool mustard
+cd ..
+```
+
+## Collapsed 1:1 Tool Benchmark
+
+The current end-to-end tool benchmark is the collapsed `1_1` dataset:
+
+- positives: one representative 200 nt window per pre-miRNA
+- negatives: matched 1:1 negatives
+- source dataset: `benchmark/datasets/1_1_collapsed.csv`
+
+### Full Pipeline
+
+Run the following commands from the repository root.
+
+If `benchmark/datasets/1_1_collapsed.csv` is missing, rebuild it once:
+
+```bash
+python benchmark/build_1_1_dataset.py
+```
+
+Prepare tool-specific inputs:
+
+```bash
+python benchmark/prepare_1_1_inputs.py
+```
+
+Run all tool wrappers:
+
+```bash
+bash benchmark/run_1_1_tools.sh
+```
+
+Normalize outputs and compute shared label-based metrics:
+
+```bash
+python benchmark/evaluate_1_1_outputs.py
+```
+
+### Outputs
+
+- prepared inputs: `benchmark/prepared_inputs/1_1_collapsed/`
+- raw tool outputs: `results/{tool}/1_1_collapsed/`
+- normalized per-tool outputs: `benchmark/evaluated/1_1_collapsed/{tool}.csv`
+- summary metrics: `benchmark/evaluated/1_1_collapsed/metrics.csv`
+
+### Tool-Specific Prepared Inputs
+
+- `deepmir`: original 200 nt sequence FASTA
+- `deepmirgene`: original 200 nt sequence FASTA
+- `dnnpremir`: 180 nt crop
+- `mirdnn`: 160 nt crop
+- `mire2e`: 100 nt target-aware crop
+- `mustard`: 100 nt target-aware BED intervals, static mode
+
+The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positive still fully contains the target pre-miRNA.
+
+### Evaluation Notes
+
+- metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
+- MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
+- this benchmark is a candidate-level collapsed `1_1` benchmark, not the full scan benchmark
 
 ## Download Data
 
