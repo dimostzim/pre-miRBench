@@ -140,7 +140,9 @@ def main():
         os.makedirs(deepmirgene_results_dir, exist_ok=True)
         cmd.extend(["-v", f"{deepmirgene_results_dir}:/opt/deepmirgene/deepmirgene_src/inference/results"])
     elif args.tool == "dnnpremir":
-        dnnpremir_temp_dir = os.path.join(repo_root, "results", "dnnpremir", "_temp")
+        dnnpremir_temp_dir = os.path.join(repo_root, "results", "dnnpremir", "_temp", args.output_name)
+        if os.path.isdir(dnnpremir_temp_dir):
+            shutil.rmtree(dnnpremir_temp_dir)
         os.makedirs(dnnpremir_temp_dir, exist_ok=True)
         cmd.extend(["-v", f"{dnnpremir_temp_dir}:/opt/dnnpremir/dnnpremir_src/temp"])
     elif args.tool == "mire2e":

@@ -71,12 +71,19 @@ Normalize outputs and compute shared label-based metrics:
 python benchmark/balanced_benchmark/evaluate_outputs.py
 ```
 
+Create a 4-panel summary plot for precision, recall, specificity, and F1:
+
+```bash
+python benchmark/balanced_benchmark/plot_metrics.py
+```
+
 ### Outputs
 
 - prepared inputs: `benchmark/prepared_inputs/balanced_benchmark/`
 - raw tool outputs: `results/{tool}/balanced_benchmark/`
 - normalized per-tool outputs: `benchmark/evaluated/balanced_benchmark/{tool}.csv`
 - summary metrics: `benchmark/evaluated/balanced_benchmark/metrics.csv`
+- summary plot: `benchmark/evaluated/balanced_benchmark/metrics_4panel.png`
 
 ### Tool-Specific Prepared Inputs
 
@@ -123,6 +130,18 @@ Run all tool wrappers chunk by chunk:
 
 ```bash
 bash benchmark/scan_benchmark/run_tools.sh
+```
+
+The scan runner now uses bounded per-tool chunk parallelism by default:
+`deepmir=2`, `deepmirgene=2`, `dnnpremir=1`, `mirdnn=1`, `mire2e=1`,
+`mustard=1`.
+
+Override the defaults when needed:
+
+```bash
+bash benchmark/scan_benchmark/run_tools.sh \
+  --jobs-default 1 \
+  --jobs deepmir=3,deepmirgene=3,mirdnn=2
 ```
 
 Normalize raw scan outputs, merge positive windows into loci, and compute locus-level metrics:
