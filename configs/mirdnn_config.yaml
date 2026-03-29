@@ -1,7 +1,8 @@
 # mirDNN Configuration
+# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
 
 # Required parameters
-input: benchmark/prepared_inputs/balanced_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/mirdnn/balanced_benchmark.fa
 
 # Optional parameters (defaults shown)
 model: animal           # default: animal (options: animal, plants)

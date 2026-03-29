@@ -41,6 +41,11 @@ python tools/inference.py --tool {tool} --output-name my_run
 
 Edit `configs/{tool}_config.yaml` to set default parameters, or pass an explicit config file with `--config`.
 
+The root configs now point at the prepared balanced benchmark inputs under
+`benchmark/prepared_inputs/balanced_benchmark/{tool}/`, so run
+`python benchmark/balanced_benchmark/prepare_inputs.py` first if you want to use
+those defaults. Otherwise pass an explicit config file with `--config`.
+
 ## Results
 
 Results are written to `results/{tool}/{output-name}/`.

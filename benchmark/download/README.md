@@ -21,5 +21,6 @@ Default: `chr14`
 
 Downloads:
 - `{chr}.fa` - Human chromosome sequence (soft-masked: repeats in lowercase)
+- `{chr}.wigFix.gz` - PhyloP basewise conservation track for MuStARD
 - `hg38.gtf` - GTF annotation (filtered to chromosome)
 - `hsa-precursors-no-v2.bed` - miRNA precursor coordinates (filtered to chromosome)

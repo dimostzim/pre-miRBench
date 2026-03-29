@@ -1,19 +1,20 @@
 # MuStARD Configuration
+# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
 
 # Required parameters
-targetIntervals: benchmark/prepared_inputs/balanced_collapsed.bed
+targetIntervals: benchmark/prepared_inputs/balanced_benchmark/mustard/balanced_benchmark.bed
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 
 # Optional parameters (defaults shown)
 chromList: chr14           # default: all
-model: MuStARD-mirS        # default: MuStARD-mirSFC-U
+model: MuStARD-mirSFC-U    # default: MuStARD-mirSFC-U
 classNum: 2                # default: 2
 modelType: CNN             # default: CNN
 winSize: 100               # default: 100
 step: 5                    # default: 5
 staticPredFlag: 1          # default: 0
-inputMode: sequence        # default: sequence,RNAfold,conservation
+inputMode: sequence,RNAfold,conservation  # default: sequence,RNAfold,conservation
 threads: 10                # default: 10
 modelDirName: results      # default: results
 intermDir: results/mustard_intermediate  # default: same

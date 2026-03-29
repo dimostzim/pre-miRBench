@@ -1,7 +1,8 @@
 # DeepMir Configuration
+# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
 
 # Required parameters
-input: benchmark/prepared_inputs/balanced_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/deepmir/balanced_benchmark.fa
 
 # Optional parameters (defaults shown)
 model: fine_tuned_cnn    # default: fine_tuned_cnn (best performing, options: fine_tuned_cnn, base_cnn)

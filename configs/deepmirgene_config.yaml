@@ -1,7 +1,8 @@
 # deepMiRGene Configuration
+# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
 
 # Required parameters
-input: benchmark/prepared_inputs/balanced_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/deepmirgene/balanced_benchmark.fa
 
 # Optional parameters (defaults shown)
 model: null            # default: use bundled model (in deepmirgene_src/inference/model/new_test.hdf5)

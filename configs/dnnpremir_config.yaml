@@ -1,4 +1,5 @@
 # dnnPreMiR Configuration
+# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
 
 # Required parameters
-input: benchmark/prepared_inputs/balanced_collapsed.fa
+input: benchmark/prepared_inputs/balanced_benchmark/dnnpremir/balanced_benchmark.fa

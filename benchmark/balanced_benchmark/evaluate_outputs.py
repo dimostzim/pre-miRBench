@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument("--prefix", default="balanced_benchmark", help="Dataset/output prefix, e.g. balanced_benchmark")
     parser.add_argument("--tools", default="all", help="Comma-separated tool list or 'all'")
     parser.add_argument("--threshold", type=float, default=0.5, help="Classification threshold for score-based tools")
-    parser.add_argument("--mustard-positive-column", type=int, default=0, help="MuStARD score column to treat as positive (source indicates class_0 is positive)")
+    parser.add_argument("--mustard-positive-column", type=int, default=1, help="MuStARD score column to treat as positive; raw predictions are written as class_0, class_1")
     return parser.parse_args()
 
 

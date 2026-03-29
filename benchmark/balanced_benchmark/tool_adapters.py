@@ -441,7 +441,7 @@ def normalize_mustard(output_path, metadata_rows, threshold, positive_column):
     return rows
 
 
-def normalize_tool_output(tool, output_path, metadata_path, threshold=0.5, mustard_positive_column=0):
+def normalize_tool_output(tool, output_path, metadata_path, threshold=0.5, mustard_positive_column=1):
     metadata_rows, metadata_by_record = load_metadata(metadata_path)
     output_path = Path(output_path)
 

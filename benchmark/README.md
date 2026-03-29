@@ -39,6 +39,12 @@ The current end-to-end tool benchmark is the collapsed balanced dataset:
 - implementation: `benchmark/balanced_benchmark/`
 - source dataset: `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv`
 
+The saved dataset currently has `55` positives and `55` negatives (`110` rows
+total). The chr14 truth BED contains `60` precursor loci, but `5` loci never
+enter the balanced benchmark because no 200 nt source window fully containing
+them passes the folding pipeline repeat-mask filter (`--max_repeat_frac 0.1`).
+That exclusion happens before collapsing or negative sampling.
+
 ### Full Pipeline
 
 If `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv` is missing, rebuild it once:
@@ -79,7 +85,8 @@ python benchmark/balanced_benchmark/evaluate_outputs.py
 - `dnnpremir`: 180 nt crop
 - `mirdnn`: 160 nt crop
 - `mire2e`: 100 nt target-aware crop
-- `mustard`: 100 nt target-aware BED intervals, static mode
+- `mustard`: 100 nt target-aware BED intervals, static mode, `MuStARD-mirSFC-U`
+  with `sequence,RNAfold,conservation`
 
 The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positive still fully contains the target pre-miRNA.
 
@@ -87,7 +94,7 @@ The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positi
 
 - metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
 - MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
-- this benchmark is a candidate-level collapsed balanced benchmark, not the full scan benchmark
+- this benchmark is a candidate-level collapsed balanced benchmark derived from eligible 200 nt source windows, not the full chr14 truth set or the full scan benchmark
 
 ## Scan Benchmark
 
@@ -98,7 +105,8 @@ The scan benchmark searches full `chr14` and evaluates recovered precursor loci:
 - truth loci: `benchmark/data/hsa-precursors-no-v2.bed` filtered to `chr14`
 - default result prefix: `scan_chr14`
 
-This is one shared scan benchmark for all tools:
+This is one shared scan benchmark for all tools. It is intentionally a common
+evaluation setup, not a paper-identical native scan protocol for every model:
 
 - `mire2e` and `mustard` use native scan mode
 - `deepmir`, `deepmirgene`, `dnnpremir`, and `mirdnn` use externally generated sliding windows over `chr14`
@@ -135,6 +143,7 @@ python benchmark/scan_benchmark/evaluate_outputs.py
 
 - chunk size defaults to `1,000,000` bp with `200` bp overlap for native scan tools
 - non-native scan windows use a global stride of `50` bp by default
+- externally generated windows containing ambiguous bases (for example `N` in assembly gaps) are skipped before running the candidate-only tools
 - external window sizes:
   - `deepmir`: `200`
   - `deepmirgene`: `200`
@@ -146,6 +155,7 @@ This benchmark is substantially heavier than the balanced benchmark. Start with 
 ### Scan Evaluation Notes
 
 - score threshold is fixed at `0.5`
+- native chunk overlaps are deduplicated by exact `(chrom, start, end, strand)` before locus merging
 - positive windows are merged into loci when they overlap on the same strand
 - a predicted locus counts as a hit when it overlaps at least `50%` of a truth locus
 - each truth locus can be matched at most once
@@ -156,6 +166,28 @@ This benchmark is substantially heavier than the balanced benchmark. Start with 
   - `precision_locus`
   - `locus_recall`
   - `fp_per_mb`
+
+### Balanced Evaluation Notes
+
+- score threshold is fixed at `0.5` for score-based tools
+- `deepmir`, `deepmirgene`, and `dnnpremir` only emit hard class labels in the current wrappers, so AUROC/AUPRC are not meaningful for them without exposing continuous scores
+- `mirdnn`, `mire2e`, and `mustard` emit continuous scores, so AUROC/AUPRC can be computed for those tools
+- MuStARD balanced predictions are two-column probabilities in `(class_0, class_1)` order; the positive pre-miRNA class is column `1`
+
+## Validation
+
+Run the repository validation checks after updating prepared inputs, configs, or
+benchmark code:
+
+```bash
+python benchmark/validate_benchmarks.py
+```
+
+The validator checks:
+
+- balanced benchmark dataset counts and the `55`/`60` source-window caveat
+- compatibility between the refactored balanced benchmark pipeline and the saved legacy `1_1_collapsed` metrics, when those results are present
+- scan chunk coverage and window-count consistency for the prepared chr14 scan manifests
 
 ## Download Data
 

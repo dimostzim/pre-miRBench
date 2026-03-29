@@ -4,13 +4,13 @@ targetIntervals: benchmark/prepared_inputs/balanced_benchmark/mustard/balanced_b
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 chromList: chr14
-model: MuStARD-mirS
+model: MuStARD-mirSFC-U
 classNum: 2
 modelType: CNN
 winSize: 100
 step: 5
 staticPredFlag: 1
-inputMode: sequence
+inputMode: sequence,RNAfold,conservation
 threads: 10
 modelDirName: results
 intermDir: results/mustard_intermediate

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from pathlib import Path
+import shutil
 
 from tool_adapters import (
     TOOLS,
@@ -126,6 +127,10 @@ def build_runtime_config(tool, input_relpath, chunk_id, chrom, genome_relpath, c
     raise ValueError(f"Unsupported tool: {tool}")
 
 
+def is_supported_external_window(sequence):
+    return not (set(sequence) - set("ACGU"))
+
+
 def prepare_native_mire2e(chunk_rows, chrom_sequence, tool_dir, repo_root, chrom, genome_relpath, cons_dir_relpath):
     chunk_dir = tool_dir / "chunks"
     config_dir = tool_dir / "configs"
@@ -238,6 +243,8 @@ def prepare_window_tool(tool, chunk_rows, chrom_sequence, tool_dir, repo_root, c
             chunk["core_end"],
         ):
             plus_sequence = normalize_sequence(chrom_sequence[start - 1:end])
+            if not is_supported_external_window(plus_sequence):
+                continue
             minus_sequence = reverse_complement_rna(plus_sequence)
             for strand, sequence in (("+", plus_sequence), ("-", minus_sequence)):
                 strand_name = "plus" if strand == "+" else "minus"
@@ -321,6 +328,8 @@ def main():
 
     for tool in tools:
         tool_dir = output_dir / tool
+        if tool_dir.exists():
+            shutil.rmtree(tool_dir)
         if tool == "mire2e":
             count = prepare_native_mire2e(
                 chunk_rows,

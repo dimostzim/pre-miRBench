@@ -49,6 +49,35 @@ def load_config(config_path):
     return config
 
 
+def _config_repo_path(repo_root, value):
+    if os.path.isabs(value):
+        return value
+    return os.path.join(repo_root, value)
+
+
+def require_repo_path(repo_root, value, description, expect_dir=False):
+    path = _config_repo_path(repo_root, value)
+    exists = os.path.isdir(path) if expect_dir else os.path.isfile(path)
+    if not exists:
+        kind = "directory" if expect_dir else "file"
+        raise FileNotFoundError(f"Missing {description} {kind}: {path}")
+    return path
+
+
+def require_mustard_conservation_files(repo_root, cons_dir, chrom_list, input_mode):
+    if "conservation" not in [item.strip() for item in input_mode.split(",") if item.strip()]:
+        return
+
+    if chrom_list == "all":
+        return
+
+    cons_dir_path = _config_repo_path(repo_root, cons_dir)
+    for chrom in [item.strip() for item in chrom_list.split(",") if item.strip()]:
+        wigfix_path = os.path.join(cons_dir_path, f"{chrom}.wigFix.gz")
+        if not os.path.isfile(wigfix_path):
+            raise FileNotFoundError(f"Missing MuStARD conservation file: {wigfix_path}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
@@ -64,6 +93,22 @@ def main():
         config_path = os.path.join(repo_root, "configs", f"{args.tool}_config.yaml")
 
     config = load_config(config_path)
+
+    if args.tool == "mustard":
+        require_repo_path(repo_root, config["targetIntervals"], "MuStARD targetIntervals")
+        require_repo_path(repo_root, config["genome"], "MuStARD genome FASTA")
+        require_repo_path(repo_root, config["consDir"], "MuStARD conservation directory", expect_dir=True)
+        require_mustard_conservation_files(
+            repo_root,
+            config["consDir"],
+            config["chromList"],
+            config["inputMode"],
+        )
+    else:
+        require_repo_path(repo_root, config["input"], f"{args.tool} input")
+
+    if args.tool == "deepmirgene" and config.get("model"):
+        require_repo_path(repo_root, config["model"], "deepMiRGene model")
 
     output_dir = os.path.join(repo_root, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -82,8 +127,14 @@ def main():
 
     if args.tool == "deepmir":
         deepmir_user_data_dir = os.path.join(repo_root, "results", "deepmir", "_user_data")
+        deepmir_runtime_predictor = os.path.join(repo_root, "tools", "deepmir", "runtime_predictor.py")
+        deepmir_input_basename = os.path.splitext(os.path.basename(config["input"]))[0]
+        deepmir_input_user_data_dir = os.path.join(deepmir_user_data_dir, deepmir_input_basename)
         os.makedirs(deepmir_user_data_dir, exist_ok=True)
+        if os.path.isdir(deepmir_input_user_data_dir):
+            shutil.rmtree(deepmir_input_user_data_dir)
         cmd.extend(["-v", f"{deepmir_user_data_dir}:/opt/deepmir/deepmir_src/user_data"])
+        cmd.extend(["-v", f"{deepmir_runtime_predictor}:/opt/deepmir/deepmir_src/predictor.py:ro"])
     elif args.tool == "deepmirgene":
         deepmirgene_results_dir = os.path.join(repo_root, "results", "deepmirgene", "_scratch_results")
         os.makedirs(deepmirgene_results_dir, exist_ok=True)
