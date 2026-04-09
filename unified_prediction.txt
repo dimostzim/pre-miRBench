@@ -1,0 +1,318 @@
+UNIFIED PREDICTION PIPELINE
+From C. elegans genome download → folding → unified tool predictions → AUC evaluation
+================================================================================
+
+
+OVERVIEW
+--------
+This pipeline takes a raw genome, creates 200 nt sliding windows, folds them
+with RNAfold, samples negatives, and runs 6 pre-miRNA prediction tools. All
+tools produce a unified predictions.csv (window_id, probability_score) enabling
+ROC AUC and PR AUC comparison.
+
+Repository: pre-miRBench
+Run all commands from the repository root unless otherwise noted.
+
+
+================================================================================
+PART 1 — DOWNLOAD C. ELEGANS GENOME
+================================================================================
+
+The folding pipeline (folding/) expects a chromosome FASTA. Download and index:
+
+  # Download C. elegans genome (WormBase WS295 or UCSC ce11)
+  wget https://ftp.wormbase.org/pub/wormbase/releases/WS295/species/c_elegans/PRJNA13758/c_elegans.PRJNA13758.WS295.genomic.fa.gz
+  gunzip c_elegans.PRJNA13758.WS295.genomic.fa.gz
+
+  # Or for a single chromosome for testing:
+  samtools faidx c_elegans.PRJNA13758.WS295.genomic.fa chrI > chrI.fa
+
+  # Index for downstream use
+  samtools faidx <genome>.fa
+
+
+================================================================================
+PART 2 — SLIDING WINDOW CREATION
+================================================================================
+
+Create 200 nt windows across the genome (or a single chromosome):
+
+  python3 folding/make_windows.py \
+    --input <genome>.fa \
+    --output folding/output/windows.fa \
+    --window 200 \
+    --step 50
+
+  Output: FASTA with one record per window, header format:
+    >chrom|start-end|strand
+
+  For C. elegans testing a single chromosome is sufficient. The step size
+  (default 50 nt) controls overlap. Use --step 200 for non-overlapping windows.
+
+
+================================================================================
+PART 3 — RNA SECONDARY STRUCTURE FOLDING
+================================================================================
+
+Fold every window with RNAfold (Vienna RNA package required):
+
+  python3 folding/run_fold.py \
+    --input folding/output/windows.fa \
+    --output folding/output/windows_folded.csv
+
+  Output CSV columns:
+    window_id, sequence, structure (dot-bracket), mfe
+
+  Or run the full folding pipeline in one step:
+
+  python3 folding/run_folding.py \
+    --genome <genome>.fa \
+    --output-dir folding/output \
+    --window 200 \
+    --step 50
+
+
+================================================================================
+PART 4 — SAMPLE NEGATIVES AND BUILD DATASET
+================================================================================
+
+  # Analyse folding energy distribution
+  python3 folding/analyze_fold.py \
+    --input folding/output/windows_folded.csv \
+    --output folding/output/fold_analysis.csv
+
+  # Sample negatives (windows unlikely to be pre-miRNAs based on MFE/structure)
+  python3 folding/sample_negatives.py \
+    --positives <known_mirna_windows>.csv \
+    --candidates folding/output/windows_folded.csv \
+    --output folding/output/negatives.csv \
+    --ratio 1   # 1:1 balanced, or higher for imbalanced
+
+  # Combine into a dataset matching balanced_benchmark.csv schema:
+  #   window_id, chrom, start, end, strand, sequence, structure, mfe,
+  #   target_mirna, contained_mirnas, num_mirnas, label
+  # Place the resulting file in benchmark/balanced_benchmark/datasets/
+
+
+================================================================================
+PART 5 — PREPARE TOOL INPUTS
+================================================================================
+
+  python3 benchmark/balanced_benchmark/prepare_inputs.py \
+    --input benchmark/balanced_benchmark/datasets/<your_dataset>.csv \
+    --output-dir benchmark/prepared_inputs/<your_dataset> \
+    --prefix <your_dataset> \
+    --truth-bed benchmark/data/hsa-precursors-no-v2.bed
+
+  This creates for each tool:
+    benchmark/prepared_inputs/<your_dataset>/{tool}/<prefix>.fa
+    benchmark/prepared_inputs/<your_dataset>/{tool}/<prefix>.bed
+    benchmark/prepared_inputs/<your_dataset>/{tool}/<prefix>.metadata.csv
+
+  Tool-specific sequence length handling (applied automatically):
+    dnnpremir → trimmed/padded to 180 nt (center-crop for positives)
+    mirdnn    → trimmed/padded to 160 nt
+    mire2e    → trimmed/padded to 100 nt (internal sub-windowing by the tool)
+    mustard   → trimmed/padded to 100 nt
+    deepmir, deepmirgene → use full 200 nt input
+
+
+================================================================================
+PART 6 — UPDATE TOOL CONFIGS
+================================================================================
+
+Edit configs for your dataset. For each tool, update the input path:
+
+  benchmark/balanced_benchmark/configs/mire2e.yaml
+  benchmark/balanced_benchmark/configs/mirdnn.yaml
+  benchmark/balanced_benchmark/configs/dnnpremir.yaml
+  benchmark/balanced_benchmark/configs/deepmir.yaml
+  benchmark/balanced_benchmark/configs/deepmirgene.yaml
+  benchmark/balanced_benchmark/configs/mustard.yaml   (also needs genome + consDir)
+
+  Device note: on macOS all tools run on CPU. The tools/inference.py wrapper
+  automatically suppresses --gpus all on Darwin. Set device: cpu in configs.
+
+  For mustard only — additional files required:
+    genome:    full chromosome FASTA (same as used for windowing)
+    consDir:   directory with PhyloP .wigFix.gz files per chromosome
+    chromList: comma-separated list e.g. "chrI,chrII"
+
+
+================================================================================
+PART 7 — RUN PREDICTIONS (ALL 5 DOCKER TOOLS)
+================================================================================
+
+  # Run all tools sequentially:
+  bash benchmark/balanced_benchmark/run_tools.sh <your_dataset>
+
+  # Or individually:
+  python3 tools/inference.py --tool mire2e     --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/mire2e.yaml
+  python3 tools/inference.py --tool mirdnn     --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/mirdnn.yaml
+  python3 tools/inference.py --tool dnnpremir  --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/dnnpremir.yaml
+  python3 tools/inference.py --tool deepmirgene --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/deepmirgene.yaml
+  python3 tools/inference.py --tool deepmir    --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/deepmir.yaml
+  python3 tools/inference.py --tool mustard    --output-name <your_dataset> --config benchmark/balanced_benchmark/configs/mustard.yaml
+
+  Each tool writes:
+    results/{tool}/<your_dataset>/predictions.csv
+  with columns:
+    window_id,probability_score
+
+  (This is the unified output format introduced by the unification changes.)
+
+
+================================================================================
+PART 8 — EVALUATE AND PLOT
+================================================================================
+
+  # Compute binary metrics (precision, recall, F1, MCC) + ROC AUC + PR AUC:
+  python3 benchmark/balanced_benchmark/evaluate_outputs.py \
+    --prepared-dir benchmark/prepared_inputs/<your_dataset> \
+    --results-dir results \
+    --output-dir benchmark/evaluated/<your_dataset> \
+    --prefix <your_dataset> \
+    --tools all \
+    --threshold 0.5
+
+  Outputs:
+    benchmark/evaluated/<your_dataset>/metrics.csv    — all metrics per tool
+    benchmark/evaluated/<your_dataset>/curves.json    — ROC/PR curve data
+    benchmark/evaluated/<your_dataset>/{tool}.csv     — normalized per-tool predictions
+
+  # Generate plots:
+  python3 benchmark/balanced_benchmark/plot_metrics.py \
+    --metrics-csv benchmark/evaluated/<your_dataset>/metrics.csv \
+    --curves-json benchmark/evaluated/<your_dataset>/curves.json \
+    --out-dir benchmark/evaluated/<your_dataset> \
+    --title "C. elegans Pre-miRNA Benchmark"
+
+  Outputs:
+    metrics_4panel.png     — bar charts: Precision, Recall, Specificity, F1
+    auc_curves.png         — ROC + PR curves for all tools on same axes
+    comparison_table.png   — styled summary table (sorted by ROC AUC, best highlighted)
+
+
+================================================================================
+PART 9 — QUICK REFERENCE: BALANCED BENCHMARK (HSA CHR14 DATASET)
+================================================================================
+
+  The repository ships with a 110-sample chr14 dataset:
+    benchmark/balanced_benchmark/datasets/balanced_benchmark.csv
+    (55 positives from known hsa pre-miRNAs on chr14, 55 negatives)
+
+  Full pipeline for this dataset:
+
+    python3 benchmark/balanced_benchmark/prepare_inputs.py
+    bash benchmark/balanced_benchmark/run_tools.sh balanced_benchmark
+    python3 benchmark/balanced_benchmark/evaluate_outputs.py
+    python3 benchmark/balanced_benchmark/plot_metrics.py
+
+
+================================================================================
+CODE CHANGES MADE FOR UNIFICATION
+(full details in unification_changes.txt and unification_plan.txt)
+================================================================================
+
+--- tools/mire2e/inference.py ---
+  Changed: predictions.json → predictions.csv
+  Logic:   Sub-window aggregation moved inline. For each FASTA record, all
+           internal sub-windows (mire2e re-windows each input) are aggregated
+           by stripping the -<start>-<end> suffix and taking
+           max(score_5_3, score_3_5). One row per input record.
+  Output:  window_id,probability_score
+
+--- tools/mirdnn/inference.py ---
+  Changed: Added post-processing after subprocess call to prepend header row.
+  Logic:   Upstream mirdnn_eval.py already writes (id, float). We read it back
+           and rewrite with the unified header.
+  Output:  window_id,probability_score
+
+--- tools/dnnpremir/patch_upstream.py (NEW) ---
+  Changed: Upstream isPreMiR.py's file-output block rewritten at Docker build time.
+  Logic:   Instead of argmax → True/False labels, writes result[i][0] (softmax
+           class-0 probability = pre-miRNA probability).
+  Output:  window_id,probability_score
+
+--- tools/dnnpremir/Dockerfile ---
+  Changed: Added COPY patch_upstream.py + RUN python patch_upstream.py after
+           the git clone step.
+
+--- tools/dnnpremir/inference.py ---
+  Changed: output filename .txt → .csv
+
+--- tools/deepmir/patch_upstream.py (NEW) ---
+  Changed: Upstream predictor.py's compute_predictions() rewritten at Docker
+           build time.
+  Logic:   np.argmax discarded; raw_preds[:, 1] (softmax col 1 = pre-miRNA)
+           written to predictions.csv.
+  Output:  window_id,probability_score
+
+--- tools/deepmir/Dockerfile ---
+  Changed: Added COPY patch_upstream.py + RUN python patch_upstream.py after
+           the git clone step.
+
+--- tools/deepmir/runtime_predictor.py ---
+  Changed: Kept in sync with patch — this file is volume-mounted into the
+           container as predictor.py by tools/inference.py, so it is the live
+           code path. Updated compute_predictions() and write_empty_results()
+           to use predictions.csv and raw softmax col 1.
+
+--- tools/deepmirgene/patch_upstream.py ---
+  Extended: Two new replace_once() calls added to existing Keras-compat patch.
+  Patch 1: After X_test encoding, re-parse FASTA for IDs:
+             seq_ids = [record.id for record in SeqIO.parse(INFILE, "fasta")]
+  Patch 2: np.argmax + np.savetxt replaced with CSV writer using
+             predictions[:, 0] (class 0 = pre-miRNA probability).
+  Output:  window_id,probability_score
+
+--- tools/deepmirgene/inference.py ---
+  Changed: output filename .txt → .csv
+
+--- tools/mustard/inference.py ---
+  Changed: Post-processing block added after subprocess.check_call(cmd).
+  Logic:   Reads record IDs from BED file (col 3), globs for the
+           *.predictions.txt.gz MuStARD.pl produces, reads col 1 (pre-miRNA
+           score) from each gzip-compressed tab-separated line, writes
+           predictions.csv.
+  Output:  window_id,probability_score
+
+--- tools/inference.py ---
+  Changed: Removed hardcoded --gpus all; added --platform linux/amd64.
+  Logic:   GPU requested only when device != cpu AND not on macOS (Darwin).
+           Enables correct execution on ARM Macs without GPU support.
+
+--- benchmark/balanced_benchmark/configs/mirdnn.yaml ---
+  Changed: device: cuda:0 → device: cpu
+
+--- benchmark/balanced_benchmark/configs/mire2e.yaml ---
+  Changed: device: cuda → device: cpu
+
+--- benchmark/balanced_benchmark/tool_adapters.py ---
+  Changed: All 6 bespoke normalize_* functions replaced with single
+           normalize_tool_output() reading the unified predictions.csv.
+           RESULT_FILES simplified to {"tool": "predictions.csv"} for all.
+           resolve_result_path() mustard special-case glob removed.
+           mustard_positive_column parameter retained for API compat.
+
+--- benchmark/balanced_benchmark/metrics.py ---
+  Changed: Added compute_auc_metrics(rows) using sklearn:
+             roc_auc_score, average_precision_score, roc_curve,
+             precision_recall_curve.
+           Returns roc_auc, pr_auc, and curve arrays for plotting.
+
+--- benchmark/balanced_benchmark/evaluate_outputs.py ---
+  Changed: Calls compute_auc_metrics() in addition to compute_binary_metrics().
+           Writes roc_auc and pr_auc columns to metrics.csv.
+           Saves all curve data (fpr, tpr, precision_curve, recall_curve) to
+           curves.json for use by plot_metrics.py.
+           Removed mustard_positive_column parameter (no longer needed).
+
+--- benchmark/balanced_benchmark/plot_metrics.py ---
+  Changed: Added two new plot functions alongside the original 4-panel bar chart:
+             plot_auc_curves() — ROC curves + PR curves for all tools on shared
+                                  axes with AUC values in the legend.
+             plot_comparison_table() — matplotlib table with all metrics,
+                                       sorted by ROC AUC, best value per column
+                                       highlighted in green.
+           Outputs: metrics_4panel.png, auc_curves.png, comparison_table.png

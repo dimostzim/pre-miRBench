@@ -1,0 +1,4 @@
+# deepMiRGene C. elegans 1:1 configuration
+
+input: benchmark/prepared_inputs/cel_balanced/deepmirgene/cel_balanced.fa
+model: null

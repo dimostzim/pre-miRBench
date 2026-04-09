@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import math
 
+from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve, precision_recall_curve
+
 
 def _safe_div(numerator, denominator):
     return numerator / denominator if denominator else 0.0
@@ -49,4 +51,48 @@ def compute_binary_metrics(rows):
         "accuracy": accuracy,
         "f1": f1,
         "mcc": mcc,
+    }
+
+
+def compute_auc_metrics(rows):
+    """Compute ROC AUC and PR AUC from rows that contain a continuous score.
+
+    Returns None for both if all scores are identical (no discrimination power)
+    or if scores are missing.
+
+    Also returns the (fpr, tpr) and (precision_curve, recall_curve) arrays
+    needed to plot the curves.
+    """
+    scores = [row.get("score") for row in rows]
+    labels = [int(row["ground_truth_class"]) for row in rows]
+
+    # Check we have real scores (not None) and that both classes are present
+    if any(s is None for s in scores):
+        return {
+            "roc_auc": None, "pr_auc": None,
+            "fpr": None, "tpr": None,
+            "precision_curve": None, "recall_curve": None,
+        }
+
+    scores = [float(s) for s in scores]
+
+    if len(set(labels)) < 2:
+        return {
+            "roc_auc": None, "pr_auc": None,
+            "fpr": None, "tpr": None,
+            "precision_curve": None, "recall_curve": None,
+        }
+
+    roc_auc = roc_auc_score(labels, scores)
+    pr_auc = average_precision_score(labels, scores)
+    fpr, tpr, _ = roc_curve(labels, scores)
+    prec_curve, rec_curve, _ = precision_recall_curve(labels, scores)
+
+    return {
+        "roc_auc": roc_auc,
+        "pr_auc": pr_auc,
+        "fpr": fpr.tolist(),
+        "tpr": tpr.tolist(),
+        "precision_curve": prec_curve.tolist(),
+        "recall_curve": rec_curve.tolist(),
     }

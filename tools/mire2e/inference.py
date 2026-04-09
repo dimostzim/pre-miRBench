@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import argparse
-import json
+import csv
 import os
 import tempfile
 from Bio import SeqIO
@@ -27,7 +27,8 @@ def main():
 
     model = MiRe2e(device=args.device, pretrained=args.pretrained)
 
-    predictions = []
+    # best score per original FASTA record (max over sub-windows and both strands)
+    best_score = {}
     processed = 0
 
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".fa", delete=False) as tmp:
@@ -48,11 +49,11 @@ def main():
                 verbose=args.verbose
             )
             for i, idx in enumerate(index):
-                predictions.append({
-                    "window": idx,
-                    "score_5_3": float(scores_5_3[i]),
-                    "score_3_5": float(scores_3_5[i]),
-                })
+                # mire2e appends -<start>-<end> to the record id for each sub-window
+                parent_id = idx.rsplit("-", 2)[0] if "-" in idx else idx
+                score = max(float(scores_5_3[i]), float(scores_3_5[i]))
+                if score > best_score.get(parent_id, 0.0):
+                    best_score[parent_id] = score
             processed += 1
     finally:
         try:
@@ -60,9 +61,12 @@ def main():
         except OSError:
             pass
 
-    output_file = os.path.join(args.output, "predictions.json")
-    with open(output_file, "w") as f:
-        json.dump({"predictions": predictions}, f, indent=2)
+    output_file = os.path.join(args.output, "predictions.csv")
+    with open(output_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["window_id", "probability_score"])
+        for record_id, score in best_score.items():
+            writer.writerow([record_id, score])
 
 
 if __name__ == "__main__":

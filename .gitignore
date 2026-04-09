@@ -46,3 +46,5 @@ __pycache__/
 *.pyd
 
 .DS_Store
+_work_results*
+*.fai

@@ -101,7 +101,41 @@ def main() -> None:
         "  return [K.reshape(mul, (-1, flat_dim)), p_vector]\n",
     )
 
+    # --- Unified CSV output patches ---
+    # Class convention: 0 = pre-miRNA, 1 = pseudo pre-miRNA.
+    # predictions[:, 0] is the pre-miRNA probability.
+    # import_data discards IDs; we re-parse for IDs inline (FASTA is small).
+
+    # Patch 1: collect IDs alongside the existing X_test encoding call.
+    text = replace_once(
+        text,
+        " X_test = one_hot_wrap(import_data(\"%s\" % INFILE), MAX_LEN, DIM_ENC)\n",
+        " X_test = one_hot_wrap(import_data(\"%s\" % INFILE), MAX_LEN, DIM_ENC)\n"
+        " seq_ids = [record.id for record in SeqIO.parse(\"%s\" % INFILE, \"fasta\")]\n",
+    )
+
+    # Patch 2: replace argmax + np.savetxt block with CSV probability output.
+    text = replace_once(
+        text,
+        " predictions = model.predict(X_test,verbose=0)\n"
+        " class_label = np.uint8(np.argmax(predictions,axis=1))  # 0: pre-miRNA, 1: pseudo pre-miRNA \n"
+        " print(\"True pre-miRNA: %d, Pseudo pre-miRNA: %d\" % (sum(class_label == 0), sum(class_label == 1)))\n"
+        " \n"
+        " print(\"Wrighting the results on \\\"%s\\\". (0:true pre-miRNA, 1: pseudo pre-miRNA)\" % OUTFILE)\n"
+        " np.savetxt(OUTFILE, class_label, fmt='%d')",
+        " predictions = model.predict(X_test,verbose=0)\n"
+        " class_label = np.uint8(np.argmax(predictions,axis=1))\n"
+        " print(\"True pre-miRNA: %d, Pseudo pre-miRNA: %d\" % (sum(class_label == 0), sum(class_label == 1)))\n"
+        " import csv as _csv\n"
+        " with open(OUTFILE, \"w\", newline=\"\") as _fd:\n"
+        "  _w = _csv.writer(_fd)\n"
+        "  _w.writerow([\"window_id\", \"probability_score\"])\n"
+        "  for seq_id, pred_row in zip(seq_ids, predictions.tolist()):\n"
+        "   _w.writerow([seq_id, float(pred_row[0])])  # col 0 = pre-miRNA",
+    )
+
     PATCH_TARGET.write_text(text)
+    print(f"Patched {PATCH_TARGET}")
 
 
 if __name__ == "__main__":

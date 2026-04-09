@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import argparse
+import csv
 import os
 import subprocess
 import sys
+import tempfile
 
 
 def main():
@@ -27,18 +29,24 @@ def main():
     if args.input_fold:
         fold_file = os.path.abspath(args.input_fold)
     else:
+        # Remove old fold file to prevent RNAfold from appending across runs
+        fold_file = os.path.join(os.path.abspath(args.output), "input.fold")
+        if os.path.exists(fold_file):
+            os.remove(fold_file)
         rnafold_cmd = [
             os.path.join(conda_bin, "RNAfold"),
             "--noPS",
             f"--infile={os.path.abspath(args.input)}",
-            "--outfile=input.fold"
+            "--outfile=input.fold",
         ]
         subprocess.check_call(rnafold_cmd, cwd=os.path.abspath(args.output))
-        fold_file = os.path.join(args.output, "input.fold")
 
     model_path = os.path.join(mirdnn_src, "models", f"{args.model}.pmt")
     eval_script = os.path.join(mirdnn_src, "mirdnn_eval.py")
     output_file = os.path.join(os.path.abspath(args.output), "predictions.csv")
+    # Remove any previous predictions to prevent the upstream from appending to it
+    if os.path.exists(output_file):
+        os.remove(output_file)
 
     cmd = [
         sys.executable,
@@ -52,6 +60,14 @@ def main():
     ]
 
     subprocess.check_call(cmd)
+
+    # Add header row to the headerless CSV produced by the upstream script
+    with open(output_file, newline="") as f:
+        rows = list(csv.reader(f))
+    with open(output_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["window_id", "probability_score"])
+        writer.writerows(rows)
 
 
 if __name__ == "__main__":

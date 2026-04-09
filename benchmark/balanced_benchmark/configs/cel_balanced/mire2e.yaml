@@ -1,0 +1,8 @@
+# miRe2e C. elegans 1:1 configuration
+
+input: benchmark/prepared_inputs/cel_balanced/mire2e/cel_balanced.fa
+device: cpu
+pretrained: hsa
+length: 100
+step: 20
+batch_size: 4096

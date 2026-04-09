@@ -1,0 +1,477 @@
+UNIFICATION PLAN — Unified probability CSV output for all 6 tools
+Goal: each tool emits predictions.csv with exactly two columns:
+        window_id        — FASTA record ID (string, as written in the input .fa header)
+        probability_score — float [0, 1], probability that the window is a pre-miRNA
+This makes AUC computation trivial and removes the bespoke parsing logic in tool_adapters.py.
+No model weights, model architectures, or training code are touched.
+================================================================================
+
+
+BACKGROUND: WHY THE THREE BINARY TOOLS NEED SOURCE PATCHES
+-----------------------------------------------------------
+dnnpremir, deepmirgene, and deepmir all use a 2-class softmax as their final layer.
+After the forward pass the raw output is a (n, 2) float matrix — a genuine probability
+distribution. Each tool immediately discards it with np.argmax and writes a binary label.
+There is no threshold tuning, no calibration, no post-processing: it is a plain argmax.
+The probability was always there; it was just never persisted to disk.
+
+To recover it we patch the upstream source files at Docker build time (the same mechanism
+already used in deepmirgene/patch_upstream.py for Keras compatibility fixes). No model
+is changed — only the final file-writing block.
+
+
+================================================================================
+CHANGE 1 — mire2e
+================================================================================
+File to change: tools/mire2e/inference.py
+
+Current behaviour
+  For every FASTA record, model.predict() is called and returns:
+    scores_5_3  : array of floats, one per internal sub-window
+    scores_3_5  : array of floats, one per internal sub-window
+    index       : list of sub-window IDs, each formatted as "<record_id>-<start>-<end>"
+  All entries are collected into a flat list and written as predictions.json.
+  The benchmark then uses _infer_mire2e_record_id() to strip the trailing -start-end
+  suffix and recover the original record_id, taking max(score_5_3, score_3_5) per record.
+
+What to change
+  Perform that aggregation inside inference.py instead of deferring it to tool_adapters.
+  After the loop over FASTA records, group all sub-window entries by parent record_id
+  (strip the trailing "-<int>-<int>" suffix from each index value), take
+  max(score_5_3, score_3_5) across all sub-windows belonging to that record, and write
+  one row per original FASTA record.
+
+  New output: predictions.csv (replaces predictions.json)
+    Header:  window_id,probability_score
+    Example: balanced_benchmark__000001,0.9821
+
+Implementation sketch (inference.py changes only):
+  - Replace the `predictions` list with a dict: best_score = {}
+  - After model.predict() for each record, iterate over (index, scores_5_3, scores_3_5):
+        parent_id = idx.rsplit("-", 2)[0]   # strip sub-window suffix
+        score = max(float(s53), float(s35))
+        if score > best_score.get(parent_id, 0.0):
+            best_score[parent_id] = score
+  - After all records: write predictions.csv from best_score dict
+  - Remove the JSON import and output_file logic
+
+Why rsplit("-", 2)[0] is safe: the record_id format in the benchmark is
+"balanced_benchmark__NNNNNN" (no trailing hyphens), and mire2e appends -<start>-<end>,
+so stripping two hyphen-delimited tokens from the right is unambiguous.
+
+Side effect: predictions.json is no longer produced. RESULT_FILES in tool_adapters.py
+must be updated (see Change 7).
+
+
+================================================================================
+CHANGE 2 — mirdnn
+================================================================================
+File to change: tools/mirdnn/inference.py
+
+Current behaviour
+  Delegates to the upstream mirdnn_eval.py which writes predictions.csv with no header:
+    <sequence_id>,<float_score>
+  The score is already a raw probability from the model's sigmoid/softmax output.
+
+What to change
+  After the subprocess call, open the output predictions.csv and rewrite it with a
+  header row added. This is a pure post-processing step — the upstream script is
+  untouched.
+
+  New output: predictions.csv (same filename, same data, header added)
+    Header:  window_id,probability_score
+
+Implementation sketch (inference.py changes only):
+  - After subprocess.check_call(cmd), read the written predictions.csv with csv.reader
+  - Rewrite the same file using csv.writer, writing the header first, then all rows
+
+This is the smallest change of all six tools.
+
+
+================================================================================
+CHANGE 3 — dnnpremir
+================================================================================
+Files to change:
+  tools/dnnpremir/patch_upstream.py   (new file — does not exist yet)
+  tools/dnnpremir/Dockerfile          (add two lines to run the patch)
+  tools/dnnpremir/inference.py        (change output filename from .txt to .csv)
+
+Current behaviour
+  isPreMiR.py (cloned from github.com/zhengxueming/dnnPreMiR) does:
+    result = predict_results(seq_struct_vector_array)   # shape (n, 2)
+    prediction = np.argmax(result, axis=1)              # throws away probabilities
+    for i in range(len(name_list)):
+        fd.write(name_list[i])                          # ">record_id\n"
+        fd.write(seq_list[i])                           # "SEQUENCE  True/False\n"
+  Class convention: index 0 = pre-miRNA, index 1 = non-pre-miRNA.
+  So result[:, 0] is the probability of being a pre-miRNA.
+
+What to change
+
+  patch_upstream.py:
+    Replace the file-writing block in isPreMiR.py using the same replace_once()
+    pattern from deepmirgene/patch_upstream.py.
+
+    Old block to replace:
+        if outfile:
+            fd = open(outfile,"w")
+            for i in range(len(name_list)):
+                fd.write(name_list[i])
+                fd.write(seq_list[i])
+                if prediction[i] == 0:
+                    fd.write("  True\n")
+                else:
+                    fd.write("  False\n")
+                fd.write("===========================\n")
+            fd.close()
+
+    New block:
+        if outfile:
+            import csv as _csv
+            with open(outfile, "w", newline="") as _fd:
+                _w = _csv.writer(_fd)
+                _w.writerow(["window_id", "probability_score"])
+                for i in range(len(name_list)):
+                    record_id = name_list[i].strip().lstrip(">")
+                    _w.writerow([record_id, float(result[i][0])])
+
+    Note: name_list entries are the raw lines from the RNAfold output, which are the
+    FASTA header lines (">record_id\n"). Strip and lstrip(">") recovers the plain ID.
+
+  Dockerfile:
+    After the `git clone` line, add:
+        COPY patch_upstream.py ./
+        RUN python /opt/dnnpremir/patch_upstream.py
+
+  inference.py:
+    Change `output_file = ... "predictions.txt"` to `"predictions.csv"`
+
+
+================================================================================
+CHANGE 4 — deepmir
+================================================================================
+Files to change:
+  tools/deepmir/patch_upstream.py   (new file — does not exist yet)
+  tools/deepmir/Dockerfile          (add two lines to run the patch)
+  tools/deepmir/runtime_predictor.py (update — this is the reference copy in our repo;
+                                      see note below)
+
+Current behaviour
+  The upstream predictor.py (cloned from github.com/jacordero/deepmir) does:
+    predictions = np.argmax(model.predict(images), axis=1)   # shape (n,) — argmax
+    for name, prediction in zip(names, predictions):
+        label = "pre-miRNA" if prediction == 1 else "not pre-miRNA"
+        results.write("{},{},{},{}\n".format(name, seq, fold, label))
+  Class convention: index 1 = pre-miRNA, index 0 = non-pre-miRNA.
+  So raw_preds[:, 1] is the pre-miRNA probability.
+
+  Note on runtime_predictor.py: this file exists in tools/deepmir/ but is NOT copied
+  into the Docker image (the Dockerfile only COPYs inference.py). It appears to be a
+  local reference/development copy of predictor.py. The patch approach targets the
+  upstream file cloned into deepmir_src at build time, keeping the same pattern used
+  by deepmirgene.
+
+What to change
+
+  patch_upstream.py:
+    Target: /opt/deepmir/deepmir_src/predictor.py
+
+    Old block to replace (the compute_predictions function body):
+        predictions = np.argmax(model.predict(images), axis=1)
+        results_filename = data_directory + "/results.csv"
+        with open(results_filename, "w") as results:
+            results.write("hairpin,sequence,fold,label\n")
+            for name, prediction in zip(names.tolist(), predictions.tolist()):
+                name = name.decode("utf-8")
+                label = "pre-miRNA" if prediction == 1 else "not pre-miRNA"
+                seq_fold = seq_fold_dict[name]
+                results.write("{},{},{},{}\n".format(name, seq_fold[0], seq_fold[1], label))
+
+    New block:
+        raw_preds = model.predict(images)          # shape (n, 2) — keep full softmax
+        results_filename = data_directory + "/predictions.csv"
+        with open(results_filename, "w", newline="") as results:
+            import csv as _csv
+            _w = _csv.writer(results)
+            _w.writerow(["window_id", "probability_score"])
+            for name, pred_row in zip(names.tolist(), raw_preds.tolist()):
+                name = name.decode("utf-8")
+                _w.writerow([name, float(pred_row[1])])   # col 1 = pre-miRNA
+
+  Also update runtime_predictor.py (the reference copy) with the same logic change so
+  it stays in sync with what the Docker image runs.
+
+  Dockerfile:
+    After the `git clone` line, add:
+        COPY patch_upstream.py ./
+        RUN python /opt/deepmir/patch_upstream.py
+
+  Note: deepmir's inference.py currently copies from user_data/<basename>/ to the output
+  dir. The old result file was results.csv; the new one is predictions.csv. Update the
+  copy loop in inference.py to look for predictions.csv (or copy everything blindly as
+  it already does — `shutil.copy2` for all files — which will work without changes).
+
+
+================================================================================
+CHANGE 5 — deepmirgene
+================================================================================
+File to change: tools/deepmirgene/patch_upstream.py (extend existing file)
+No Dockerfile change needed — the patch is already wired in.
+
+Current behaviour
+  deepMiRGene.py (after existing patches) does:
+    predictions = model.predict(X_test, verbose=0)       # shape (n, 2)
+    class_label = np.uint8(np.argmax(predictions, axis=1))  # 0=pre-miRNA, 1=pseudo
+    np.savetxt(OUTFILE, class_label, fmt='%d')
+  Class convention: index 0 = pre-miRNA, index 1 = pseudo pre-miRNA.
+  So predictions[:, 0] is the pre-miRNA probability.
+
+  Sequence IDs are NOT currently captured alongside predictions. The upstream
+  import_seq() function discards record IDs:
+    def import_seq(filename):
+        seqs = []
+        for record in SeqIO.parse(filename, "fasta"):
+            seqs.append(str(record.seq))   # ID not stored
+        return seqs
+
+What to change
+
+  Extend patch_upstream.py with two additional replace_once() calls:
+
+  Patch A — make import_seq also return IDs:
+    Old:
+        def import_seq(filename):
+         seqs = []
+         for record in SeqIO.parse(filename, "fasta"):
+          a_seq = str(record.seq)
+          seqs.append(a_seq)
+         return seqs
+    New:
+        def import_seq(filename):
+         seqs = []
+         ids = []
+         for record in SeqIO.parse(filename, "fasta"):
+          seqs.append(str(record.seq))
+          ids.append(record.id)
+         return seqs, ids
+
+  Patch B — update the call site and the output block:
+    Old:
+        X_test = one_hot_wrap(import_data("%s" % INFILE), MAX_LEN, DIM_ENC)
+        ...
+        predictions = model.predict(X_test,verbose=0)
+        class_label = np.uint8(np.argmax(predictions,axis=1))  # 0: pre-miRNA, 1: pseudo pre-miRNA
+        print("True pre-miRNA: %d, Pseudo pre-miRNA: %d" % (sum(class_label == 0), sum(class_label == 1)))
+        print("Wrighting the results on \"%s\". (0:true pre-miRNA, 1: pseudo pre-miRNA)" % OUTFILE)
+        np.savetxt(OUTFILE, class_label, fmt='%d')
+
+    New:
+        seqs_raw, seq_ids = import_seq("%s" % INFILE)
+        strs_raw = seq2str(seqs_raw)
+        X_test = one_hot_wrap(encode(seqs_raw, strs_raw), MAX_LEN, DIM_ENC)
+        ...
+        predictions = model.predict(X_test,verbose=0)
+        class_label = np.uint8(np.argmax(predictions,axis=1))
+        print("True pre-miRNA: %d, Pseudo pre-miRNA: %d" % (sum(class_label == 0), sum(class_label == 1)))
+        import csv as _csv
+        with open(OUTFILE, "w", newline="") as _fd:
+            _w = _csv.writer(_fd)
+            _w.writerow(["window_id", "probability_score"])
+            for seq_id, pred_row in zip(seq_ids, predictions.tolist()):
+                _w.writerow([seq_id, float(pred_row[0])])   # col 0 = pre-miRNA
+
+  Note: import_data() internally calls import_seq() and encode(). Since we split those
+  calls, we reuse seq2str and encode directly — both are already defined in the file.
+  This avoids re-parsing the FASTA a second time for IDs.
+
+  The OUTFILE path is still passed from inference.py as predictions.txt; rename to
+  predictions.csv in inference.py.
+
+
+================================================================================
+CHANGE 6 — mustard
+================================================================================
+File to change: tools/mustard/inference.py
+
+Current behaviour
+  Runs MuStARD.pl which writes a gzipped TSV at:
+    predict/static/results/intermediate_files/<prefix>.predictions.txt.gz
+  Format: one tab-separated line per interval, two float columns (class_0, class_1),
+  no header, no sequence IDs — purely positional relative to the input BED file.
+  inference.py does no post-processing; the benchmark reads the .gz file directly
+  and aligns by position to the metadata file.
+
+What to change
+  Add post-processing inside inference.py after subprocess.check_call(cmd) returns.
+
+  Steps:
+  1. Read the BED file (args.targetIntervals) to extract record IDs in order.
+     BED column 3 (0-indexed) is the record_id as written by write_tool_inputs().
+  2. Glob for the single *.predictions.txt.gz produced by MuStARD.pl under args.dir.
+  3. Read each line of the gzipped TSV: two tab-separated floats per line.
+     Column 1 (0-indexed) is the pre-miRNA score (positive class).
+  4. Zip record IDs with scores and write predictions.csv.
+
+  New output: predictions.csv in args.dir
+    Header:  window_id,probability_score
+    Example: balanced_benchmark__000001,0.9877
+
+  The gzipped raw file is kept untouched (MuStARD.pl produced it; we just read it).
+
+Implementation sketch (new block at end of inference.py, inside main(), after
+subprocess.check_call(cmd)):
+
+    import gzip, csv as _csv, glob as _glob
+
+    # Read record IDs from BED file in order
+    record_ids = []
+    with open(args.targetIntervals) as bed_fh:
+        for line in bed_fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) >= 4:
+                record_ids.append(parts[3])
+
+    # Find the predictions file MuStARD wrote
+    pattern = os.path.join(args.dir, "predict", "static", "results",
+                           "intermediate_files", "*.predictions.txt.gz")
+    matches = sorted(_glob.glob(pattern))
+    if len(matches) != 1:
+        raise FileNotFoundError(f"Expected one MuStARD predictions file, found {len(matches)}")
+    pred_gz = matches[0]
+
+    # Read scores
+    scores = []
+    with gzip.open(pred_gz, "rt") as gz_fh:
+        for raw_line in gz_fh:
+            line = raw_line.strip()
+            if line:
+                cols = [float(v) for v in line.split("\t") if v]
+                scores.append(cols[1])   # col 1 = pre-miRNA probability
+
+    if len(scores) != len(record_ids):
+        raise RuntimeError(f"mustard ID/score count mismatch: {len(record_ids)} IDs vs {len(scores)} scores")
+
+    csv_path = os.path.join(args.dir, "predictions.csv")
+    with open(csv_path, "w", newline="") as csv_fh:
+        w = _csv.writer(csv_fh)
+        w.writerow(["window_id", "probability_score"])
+        for rid, score in zip(record_ids, scores):
+            w.writerow([rid, score])
+
+
+================================================================================
+CHANGE 7 — benchmark/balanced_benchmark/tool_adapters.py
+================================================================================
+Once all six tools emit predictions.csv with the same header, the five bespoke
+normalize_* functions and the RESULT_FILES dict can be replaced by a single generic
+reader.
+
+Changes needed:
+
+  RESULT_FILES dict — update/simplify:
+    All tools now produce "predictions.csv", so the dict can become:
+        RESULT_FILES = {tool: "predictions.csv" for tool in TOOLS}
+
+  resolve_result_path() — remove the mustard special case:
+    The glob for the .gz file is no longer needed. The unified path is:
+        Path(results_dir) / tool / output_name / "predictions.csv"
+
+  Replace all normalize_* functions with a single function:
+    def normalize_unified(output_path, metadata_by_record, threshold):
+        rows = []
+        with open(output_path, newline="") as handle:
+            for row in csv.DictReader(handle):
+                record_id = row["window_id"]
+                score = float(row["probability_score"])
+                rows.append({
+                    "record_id": record_id,
+                    "window_id": metadata_by_record[record_id]["window_id"],
+                    "score": score,
+                    "predicted_class": 1 if score >= threshold else 0,
+                    "ground_truth_class": gt_to_int(metadata_by_record[record_id]["label"]),
+                })
+        if len(rows) != len(metadata_by_record):
+            raise RuntimeError(f"{output_path}: {len(rows)} predictions vs {len(metadata_by_record)} expected")
+        return rows
+
+  normalize_tool_output() — simplify dispatch:
+    All branches collapse to a single call to normalize_unified().
+    The mustard_positive_column parameter can be removed from the signature.
+
+  FIXED_LENGTHS — no change needed (used in prepare_record_for_tool, not parsing).
+
+
+================================================================================
+CHANGE 8 — non_unified.txt → update after implementation
+================================================================================
+Update the mustard entry in non_unified.txt to note that the .gz positional TSV is
+the raw intermediate and predictions.csv is the new primary output.
+
+
+================================================================================
+SUMMARY OF FILES CHANGED
+================================================================================
+
+Tool          | Files changed
+--------------|----------------------------------------------------------------------
+mire2e        | tools/mire2e/inference.py
+mirdnn        | tools/mirdnn/inference.py
+dnnpremir     | tools/dnnpremir/patch_upstream.py  (NEW)
+              | tools/dnnpremir/Dockerfile
+              | tools/dnnpremir/inference.py
+deepmir       | tools/deepmir/patch_upstream.py    (NEW)
+              | tools/deepmir/Dockerfile
+              | tools/deepmir/runtime_predictor.py (reference copy — keep in sync)
+              | tools/deepmir/inference.py         (only if results.csv→predictions.csv copy logic needs update)
+deepmirgene   | tools/deepmirgene/patch_upstream.py (extend)
+              | tools/deepmirgene/inference.py      (rename output to .csv)
+mustard       | tools/mustard/inference.py
+benchmark     | benchmark/balanced_benchmark/tool_adapters.py
+
+Total: 12 file touches, 2 new files. No model weights or architecture files touched.
+
+
+================================================================================
+RISK / GOTCHAS PER TOOL
+================================================================================
+
+mire2e
+  - The rsplit("-", 2)[0] trick for stripping sub-window suffix is already validated
+    in the existing _infer_mire2e_record_id(). If any record_id itself contains
+    hyphens (unlikely given benchmark naming), verify the stripping logic.
+  - Taking max(score_5_3, score_3_5) is the same aggregation the benchmark already
+    uses, so this does not change effective behaviour, only where it happens.
+
+mirdnn
+  - Trivial change. Only risk: upstream mirdnn_eval.py is sometimes updated;
+    confirm the column order (id, score) has not changed if rebuilding the image.
+
+dnnpremir
+  - The existing patch pattern (replace_once) will fail if the upstream isPreMiR.py
+    is updated and the target string changes. Pin the git clone to a specific commit
+    in the Dockerfile (add --branch or --single-branch with a known SHA) to prevent
+    silent breakage.
+  - name_list entries from the RNAfold output file include the full FASTA header
+    line with newline; stripping and lstrip(">") is required.
+
+deepmir
+  - deepmir's inference.py already does a shutil.copy2 of everything in user_data/,
+    so the renamed predictions.csv will be copied to args.output automatically.
+  - The runtime_predictor.py reference copy must be kept in sync manually — it is
+    not used by Docker but may be used in conda mode.
+  - Pin the jacordero/deepmir git clone to a commit SHA in the Dockerfile.
+
+deepmirgene
+  - Patch B re-routes through encode() directly instead of import_data(). Confirm
+    that import_data() is not called elsewhere in the file; if it is, update those
+    call sites too or keep import_data() working by having it call the new two-return
+    import_seq() properly.
+  - predictions[:, 0] is pre-miRNA probability (confirmed: class 0 = pre-miRNA in the
+    original paper and in the class_label == 0 check in the source).
+
+mustard
+  - The post-processing code must run AFTER MuStARD.pl has fully written the .gz file.
+    subprocess.check_call() already blocks until completion, so timing is fine.
+  - If staticPredFlag=0 (sliding window mode) is ever used, the number of output rows
+    will not match the number of BED intervals. The plan only covers staticPredFlag=1
+    (static mode), which is what the benchmark uses.

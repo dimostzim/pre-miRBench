@@ -117,13 +117,25 @@ def main():
     os.makedirs(tool_home_dir, exist_ok=True)
     os.makedirs(tool_cache_dir, exist_ok=True)
 
+    # Use --gpus all only when a CUDA device is requested and Docker GPU support is available.
+    import platform as _platform
+    device_val = config.get("device", "cpu")
+    use_gpu = (
+        isinstance(device_val, str)
+        and device_val not in ("cpu", "CPU")
+        and _platform.system() != "Darwin"
+    )
+
     cmd = [
-        "docker", "run", "--rm", "--gpus", "all",
+        "docker", "run", "--rm",
+        "--platform", "linux/amd64",
         "--user", f"{os.getuid()}:{os.getgid()}",
         "-e", f"HOME=/work/results/{args.tool}/_home",
         "-e", f"XDG_CACHE_HOME=/work/results/{args.tool}/_home/.cache",
         "-v", f"{repo_root}:/work",
     ]
+    if use_gpu:
+        cmd[2:2] = ["--gpus", "all"]
 
     if args.tool == "deepmir":
         deepmir_user_data_dir = os.path.join(repo_root, "results", "deepmir", "_user_data")
@@ -139,6 +151,10 @@ def main():
         deepmirgene_results_dir = os.path.join(repo_root, "results", "deepmirgene", "_scratch_results")
         os.makedirs(deepmirgene_results_dir, exist_ok=True)
         cmd.extend(["-v", f"{deepmirgene_results_dir}:/opt/deepmirgene/deepmirgene_src/inference/results"])
+    elif args.tool == "mirdnn":
+        # Volume-mount the local inference.py so image rebuild isn't required
+        mirdnn_runtime_inference = os.path.join(repo_root, "tools", "mirdnn", "inference.py")
+        cmd.extend(["-v", f"{mirdnn_runtime_inference}:/opt/mirdnn/inference.py:ro"])
     elif args.tool == "dnnpremir":
         dnnpremir_temp_dir = os.path.join(repo_root, "results", "dnnpremir", "_temp", args.output_name)
         if os.path.isdir(dnnpremir_temp_dir):
@@ -161,6 +177,9 @@ def main():
             target = os.path.join(checkpoint_dir, filename)
             if os.path.exists(source) and not os.path.exists(target):
                 shutil.copy2(source, target)
+        # Volume-mount the local inference.py so image rebuild isn't required
+        mire2e_runtime_inference = os.path.join(repo_root, "tools", "mire2e", "inference.py")
+        cmd.extend(["-v", f"{mire2e_runtime_inference}:/opt/mire2e/inference.py:ro"])
 
     cmd.append(f"{args.tool}:latest")
     path_prefix = "/work/"
@@ -218,6 +237,52 @@ def main():
             cmd.extend(["--model", f"{path_prefix}{config['model']}"])
 
     subprocess.check_call(cmd)
+
+    # Mustard post-processing: aggregate per-chromosome prediction files → predictions.csv
+    if args.tool == "mustard":
+        import csv as _csv
+        import glob as _glob
+        import gzip as _gzip
+
+        bed_path = os.path.join(repo_root, config["targetIntervals"])
+        chrom_records = {}
+        all_record_ids = []
+        with open(bed_path) as bed_fh:
+            for line in bed_fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) >= 4:
+                    chrom, rid = parts[0], parts[3]
+                    chrom_records.setdefault(chrom, []).append(rid)
+                    all_record_ids.append(rid)
+
+        pred_base = os.path.join(
+            output_dir, "predict", "static", "results", "intermediate_files"
+        )
+        scores_by_id = {}
+        for chrom, chrom_ids in chrom_records.items():
+            gz_path = os.path.join(pred_base, f"targets.{chrom}.predictions.txt.gz")
+            chrom_scores = []
+            with _gzip.open(gz_path, "rt") as gz_fh:
+                for raw_line in gz_fh:
+                    stripped = raw_line.strip()
+                    if stripped:
+                        cols = [float(v) for v in stripped.split("\t") if v]
+                        chrom_scores.append(cols[1])
+            if len(chrom_scores) != len(chrom_ids):
+                raise RuntimeError(
+                    f"mustard ID/score count mismatch on {chrom}: "
+                    f"{len(chrom_ids)} IDs vs {len(chrom_scores)} scores"
+                )
+            for rid, score in zip(chrom_ids, chrom_scores):
+                scores_by_id[rid] = score
+
+        csv_path = os.path.join(output_dir, "predictions.csv")
+        with open(csv_path, "w", newline="") as csv_fh:
+            writer = _csv.writer(csv_fh)
+            writer.writerow(["window_id", "probability_score"])
+            for rid in all_record_ids:
+                writer.writerow([rid, scores_by_id[rid]])
+        print(f"mustard predictions: {csv_path}")
 
 
 if __name__ == "__main__":

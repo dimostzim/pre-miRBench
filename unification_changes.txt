@@ -1,0 +1,175 @@
+UNIFICATION CHANGES LOG
+All changes produce predictions.csv with columns: window_id, probability_score
+No model weights or architectures were modified.
+================================================================================
+
+--- CHANGE 1: mire2e ---
+File changed: tools/mire2e/inference.py
+
+What was changed:
+  - Replaced JSON output (predictions.json) with CSV output (predictions.csv).
+  - Sub-window aggregation (previously done in tool_adapters.py) moved inline:
+    mire2e internally re-windows each input record; the new code strips the
+    trailing -<start>-<end> suffix from each sub-window index to recover the
+    parent record_id, then takes max(score_5_3, score_3_5) across all sub-windows
+    belonging to that record.
+  - One row per original FASTA input record.
+  - Removed json import; added csv import.
+
+Test result (3-sequence smoke test):
+  window_id,probability_score
+  Hsa-Mir-208-P2_pre,9.18201039894484e-05
+  Hsa-Mir-208-P1-v1_pre,0.0027554358821362257
+  Hsa-Mir-624_pre,7.828708476154134e-05
+  ✓ Correct format, 3 rows, float scores, named windows.
+
+
+--- CHANGE 2: mirdnn ---
+File changed: tools/mirdnn/inference.py
+
+What was changed:
+  - The upstream mirdnn_eval.py already outputs a headerless CSV with
+    (sequence_id, score). Added a post-processing step after the subprocess
+    call that reads the file back and rewrites it with the unified header row.
+  - Added csv import.
+  - No Docker rebuild needed (change runs inside the inference.py wrapper).
+
+Test result (3-sequence smoke test):
+  window_id,probability_score
+  Hsa-Mir-208-P2_pre,0.5804533958435059
+  Hsa-Mir-208-P1-v1_pre,0.04193837568163872
+  Hsa-Mir-624_pre,0.9425272941589355
+  ✓ Correct format, 3 rows, float scores, named windows.
+
+
+--- CHANGE 3: dnnpremir ---
+Files changed:
+  tools/dnnpremir/patch_upstream.py   (new file)
+  tools/dnnpremir/Dockerfile          (added COPY + RUN patch lines)
+  tools/dnnpremir/inference.py        (output filename: .txt → .csv)
+
+What was changed:
+  - patch_upstream.py uses replace_once() to rewrite the file-output block in
+    the upstream isPreMiR.py (cloned from github.com/zhengxueming/dnnPreMiR).
+  - Old: writes FASTA-style blocks with True/False labels (argmax of softmax).
+  - New: writes CSV with window_id (stripped from ">record_id\n" header lines)
+    and float(result[i][0]) — the pre-miRNA class probability (class 0 = pre-miRNA
+    in this model's convention).
+  - Dockerfile runs the patch at image build time after the git clone.
+  - Docker image rebuilt (--no-cache not required; COPY patch_upstream.py
+    invalidates the cache after the git clone step).
+
+Test result (3-sequence smoke test):
+  window_id,probability_score
+  Hsa-Mir-208-P2_pre,0.02871895581483841
+  Hsa-Mir-208-P1-v1_pre,0.0002418031799606979
+  Hsa-Mir-624_pre,0.001774981734342873
+  ✓ Correct format, 3 rows, float scores, named windows.
+
+
+--- CHANGE 4: deepmir ---
+Files changed:
+  tools/deepmir/patch_upstream.py     (new file)
+  tools/deepmir/Dockerfile            (added COPY + RUN patch lines)
+  tools/deepmir/runtime_predictor.py  (reference copy kept in sync)
+
+What was changed:
+  - patch_upstream.py rewrites compute_predictions() in the upstream predictor.py
+    (cloned from github.com/jacordero/deepmir).
+  - Old: np.argmax → "pre-miRNA"/"not pre-miRNA" string label in results.csv.
+  - New: keeps raw model.predict() output (n, 2) softmax; writes col 1
+    (pre-miRNA probability) to predictions.csv.
+  - write_empty_results() patch removed — that function does not exist in the
+    upstream predictor.py (only in our local runtime_predictor.py reference copy,
+    which was updated separately).
+  - runtime_predictor.py (local reference copy) updated to match.
+  - Docker image rebuilt from scratch after images were deleted to ensure no
+    stale layer cache.
+
+Test result (3-sequence smoke test):
+  window_id,probability_score
+  Hsa-Mir-208-P1-v1_pre,0.9999916553497314
+  Hsa-Mir-208-P2_pre,0.9963514804840088
+  Hsa-Mir-624_pre,0.9999996423721313
+  ✓ Correct format, 3 rows, float scores, named windows.
+
+
+--- CHANGE 5: deepmirgene ---
+Files changed:
+  tools/deepmirgene/patch_upstream.py  (extended — two new replace_once() calls)
+  tools/deepmirgene/inference.py       (output filename: .txt → .csv)
+
+What was changed:
+  - The existing patch_upstream.py already fixed Keras compatibility issues.
+    Two new patches added:
+    Patch 1: After the X_test encoding call, re-parse the FASTA for IDs:
+      seq_ids = [record.id for record in SeqIO.parse(INFILE, "fasta")]
+      (SeqIO is already imported in the upstream file)
+    Patch 2: Replace np.argmax + np.savetxt block with CSV probability output.
+      Uses predictions[:, 0] — class 0 = pre-miRNA in this model's convention.
+  - Rebuilt with --no-cache to bypass stale layer cache.
+
+Test result (3-sequence smoke test):
+  window_id,probability_score
+  Hsa-Mir-208-P2_pre,0.006027979776263237
+  Hsa-Mir-208-P1-v1_pre,0.8661981821060181
+  Hsa-Mir-624_pre,0.0008900664397515357
+  ✓ Correct format, 3 rows, float scores, named windows.
+
+
+--- CHANGE 6: mustard ---
+Files changed:
+  tools/mustard/inference.py
+
+What was changed:
+  - Added post-processing block after subprocess.check_call(cmd) (after MuStARD.pl
+    completes).
+  - Reads record IDs in order from the input BED file (col 3).
+  - Globs for the single *.predictions.txt.gz that MuStARD.pl writes under
+    predict/static/results/intermediate_files/.
+  - Reads col 1 (pre-miRNA/positive class score) from each gzip-compressed
+    tab-separated line.
+  - Writes predictions.csv to args.dir.
+  - Added csv, glob, gzip imports.
+  - No Docker rebuild needed (logic runs in our wrapper, not in the container).
+
+Test result (unit test with simulated .gz file):
+  window_id,probability_score
+  window_001,0.8766
+  window_002,0.09
+  window_003,0.55
+  ✓ Correct format, positional alignment verified, gzip reading confirmed.
+  Note: full integration test requires genome FASTA + PhyloP conservation data.
+
+
+--- CHANGE 7: benchmark/balanced_benchmark/tool_adapters.py ---
+File changed: benchmark/balanced_benchmark/tool_adapters.py
+
+What was changed:
+  - RESULT_FILES dict simplified: all tools now map to "predictions.csv".
+  - resolve_result_path() simplified: mustard special-case glob removed;
+    all tools use the same path pattern results/{tool}/{output_name}/predictions.csv.
+  - All five bespoke normalize_* functions (normalize_deepmir, normalize_deepmirgene,
+    normalize_dnnpremir, normalize_mirdnn, normalize_mire2e, normalize_mustard)
+    replaced with a single normalize_tool_output() that reads the unified CSV.
+  - mustard_positive_column parameter retained in signature for API compatibility
+    but no longer used.
+  - All other functions (prepare_record_for_tool, write_tool_inputs, etc.)
+    unchanged.
+
+================================================================================
+INTEGRATION CHECKS PASSED
+
+All 6 tools smoke tested on 3-sequence FASTA (benchmark/data/tool_smoke_test.fa):
+  ✓ mire2e      — predictions.csv, 3 rows, float scores, named windows
+  ✓ mirdnn      — predictions.csv, 3 rows, float scores, named windows
+  ✓ dnnpremir   — predictions.csv, 3 rows, float scores, named windows
+  ✓ deepmirgene — predictions.csv, 3 rows, float scores, named windows
+  ✓ deepmir     — predictions.csv, 3 rows, float scores, named windows
+  ✓ mustard     — post-processing logic unit tested with simulated .gz file
+
+tool_adapters.py integration test:
+  ✓ RESULT_FILES maps all 6 tools to "predictions.csv"
+  ✓ normalize_tool_output() reads unified CSV correctly for all 6 tools
+  ✓ score, predicted_class, ground_truth_class all correctly populated
+  ✓ resolve_result_path() uses unified path for all tools (mustard special case removed)

@@ -1,0 +1,16 @@
+# MuStARD C. elegans 1:1 configuration (no conservation data available)
+
+targetIntervals: benchmark/prepared_inputs/cel_balanced/mustard/cel_balanced.bed
+genome: benchmark/download/data/ce11.fa
+consDir: benchmark/download/data
+chromList: chrI,chrII,chrIII,chrIV,chrV,chrX
+model: MuStARD-mirSF
+classNum: 2
+modelType: CNN
+winSize: 100
+step: 5
+staticPredFlag: 1
+inputMode: sequence,RNAfold
+threads: 10
+modelDirName: results
+intermDir: results/mustard_intermediate

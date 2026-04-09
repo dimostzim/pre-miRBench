@@ -1,0 +1,4 @@
+# DeepMir C. elegans 1:1 configuration
+
+input: benchmark/prepared_inputs/cel_balanced/deepmir/cel_balanced.fa
+model: fine_tuned_cnn

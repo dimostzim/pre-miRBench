@@ -1,0 +1,7 @@
+# mirDNN C. elegans 1:1 configuration
+
+input: benchmark/prepared_inputs/cel_balanced/mirdnn/cel_balanced.fa
+model: animal
+device: cpu
+seq_length: 160
+batch_size: 1024

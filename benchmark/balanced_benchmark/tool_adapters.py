@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 import csv
-import gzip
-import json
-from collections import defaultdict
 from pathlib import Path
 
 TOOLS = ("deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e", "mustard")
@@ -12,13 +9,8 @@ FIXED_LENGTHS = {
     "mire2e": 100,
     "mustard": 100,
 }
-RESULT_FILES = {
-    "deepmir": "results.csv",
-    "deepmirgene": "predictions.txt",
-    "dnnpremir": "predictions.txt",
-    "mirdnn": "predictions.csv",
-    "mire2e": "predictions.json",
-}
+# All tools now emit predictions.csv with columns: window_id, probability_score
+RESULT_FILES = {tool: "predictions.csv" for tool in TOOLS}
 
 
 def parse_tools(value):
@@ -88,6 +80,13 @@ def target_aware_resize_interval(start, end, target_start, target_end, target_le
     current_length = end - start + 1
     if current_length <= target_length:
         return start, end
+
+    # If the target miRNA itself is wider than target_length, center on its midpoint
+    if (target_end - target_start + 1) > target_length:
+        target_mid = (target_start + target_end) / 2.0
+        new_start = int(round(target_mid - ((target_length - 1) / 2.0)))
+        new_start = max(start, min(new_start, end - target_length + 1))
+        return new_start, new_start + target_length - 1
 
     max_start = end - target_length + 1
     target_mid = (target_start + target_end) / 2.0
@@ -285,90 +284,20 @@ def gt_to_int(label):
     return 1 if label == "positive" else 0
 
 
-def _parse_optional_score(value):
-    if value in ("", None):
-        return None
-    return float(value)
+def normalize_tool_output(tool, output_path, metadata_path, threshold=0.5, mustard_positive_column=1):
+    """Read the unified predictions.csv and join with metadata for evaluation.
 
+    All tools now emit predictions.csv with columns: window_id, probability_score.
+    The mustard_positive_column parameter is retained for API compatibility but unused.
+    """
+    metadata_rows, metadata_by_record = load_metadata(metadata_path)
+    output_path = Path(output_path)
 
-def normalize_deepmir(output_path, metadata_by_record):
     rows = []
     with open(output_path, newline="") as handle:
         for row in csv.DictReader(handle):
-            record_id = row["hairpin"]
-            predicted_class = 1 if row["label"] == "pre-miRNA" else 0
-            rows.append({
-                "record_id": record_id,
-                "window_id": metadata_by_record[record_id]["window_id"],
-                "score": None,
-                "predicted_class": predicted_class,
-                "ground_truth_class": gt_to_int(metadata_by_record[record_id]["label"]),
-            })
-    return rows
-
-
-def normalize_deepmirgene(output_path, metadata_rows):
-    preds = []
-    with open(output_path) as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if line:
-                preds.append(line.split()[-1])
-
-    if len(preds) != len(metadata_rows):
-        raise RuntimeError(f"deepmirgene count mismatch: {len(preds)} predictions vs {len(metadata_rows)} metadata rows")
-
-    rows = []
-    for meta, pred in zip(metadata_rows, preds):
-        predicted_class = 1 if pred == "0" else 0
-        rows.append({
-            "record_id": meta["record_id"],
-            "window_id": meta["window_id"],
-            "score": None,
-            "predicted_class": predicted_class,
-            "ground_truth_class": gt_to_int(meta["label"]),
-        })
-    return rows
-
-
-def normalize_dnnpremir(output_path, metadata_by_record):
-    rows = []
-    current_record_id = None
-    with open(output_path) as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                current_record_id = line[1:]
-                continue
-            if line.startswith("="):
-                continue
-            if line.endswith("True") or line.endswith("False"):
-                token = line.rsplit(None, 1)[-1]
-                predicted_class = 1 if token == "True" else 0
-                rows.append({
-                    "record_id": current_record_id,
-                    "window_id": metadata_by_record[current_record_id]["window_id"],
-                    "score": None,
-                    "predicted_class": predicted_class,
-                    "ground_truth_class": gt_to_int(metadata_by_record[current_record_id]["label"]),
-                })
-
-    if len(rows) != len(metadata_by_record):
-        raise RuntimeError(f"dnnpremir count mismatch: {len(rows)} predictions vs {len(metadata_by_record)} metadata rows")
-    return rows
-
-
-def normalize_mirdnn(output_path, metadata_by_record, threshold):
-    rows = []
-    seen = set()
-    with open(output_path, newline="") as handle:
-        for record_id, score_text in csv.reader(handle):
-            if record_id in seen:
-                continue
-            seen.add(record_id)
-            score = float(score_text)
+            record_id = row["window_id"]
+            score = float(row["probability_score"])
             rows.append({
                 "record_id": record_id,
                 "window_id": metadata_by_record[record_id]["window_id"],
@@ -378,98 +307,15 @@ def normalize_mirdnn(output_path, metadata_by_record, threshold):
             })
 
     if len(rows) != len(metadata_by_record):
-        raise RuntimeError(f"mirdnn count mismatch: {len(rows)} predictions vs {len(metadata_by_record)} metadata rows")
+        raise RuntimeError(
+            f"{tool}: {len(rows)} predictions vs {len(metadata_by_record)} expected in metadata"
+        )
     return rows
-
-
-def _infer_mire2e_record_id(window_name, metadata_by_record):
-    if window_name in metadata_by_record:
-        return window_name
-    candidate = window_name.rsplit("-", 2)[0]
-    if candidate in metadata_by_record:
-        return candidate
-    raise KeyError(f"Unable to map miRe2e window '{window_name}' back to a record_id")
-
-
-def normalize_mire2e(output_path, metadata_by_record, threshold):
-    with open(output_path) as handle:
-        predictions = json.load(handle)["predictions"]
-
-    best_score = defaultdict(float)
-    for pred in predictions:
-        record_id = _infer_mire2e_record_id(pred["window"], metadata_by_record)
-        score = max(float(pred["score_5_3"]), float(pred["score_3_5"]))
-        if score > best_score[record_id]:
-            best_score[record_id] = score
-
-    rows = []
-    for record_id, meta in metadata_by_record.items():
-        score = best_score.get(record_id, 0.0)
-        rows.append({
-            "record_id": record_id,
-            "window_id": meta["window_id"],
-            "score": score,
-            "predicted_class": 1 if score >= threshold else 0,
-            "ground_truth_class": gt_to_int(meta["label"]),
-        })
-    return rows
-
-
-def normalize_mustard(output_path, metadata_rows, threshold, positive_column):
-    open_fn = gzip.open if str(output_path).endswith(".gz") else open
-    preds = []
-    with open_fn(output_path, "rt") as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line:
-                continue
-            preds.append([float(value) for value in line.split("\t") if value])
-
-    if len(preds) != len(metadata_rows):
-        raise RuntimeError(f"mustard count mismatch: {len(preds)} predictions vs {len(metadata_rows)} metadata rows")
-
-    rows = []
-    for meta, cols in zip(metadata_rows, preds):
-        score = cols[positive_column]
-        rows.append({
-            "record_id": meta["record_id"],
-            "window_id": meta["window_id"],
-            "score": score,
-            "predicted_class": 1 if score >= threshold else 0,
-            "ground_truth_class": gt_to_int(meta["label"]),
-        })
-    return rows
-
-
-def normalize_tool_output(tool, output_path, metadata_path, threshold=0.5, mustard_positive_column=1):
-    metadata_rows, metadata_by_record = load_metadata(metadata_path)
-    output_path = Path(output_path)
-
-    if tool == "deepmir":
-        return normalize_deepmir(output_path, metadata_by_record)
-    if tool == "deepmirgene":
-        return normalize_deepmirgene(output_path, metadata_rows)
-    if tool == "dnnpremir":
-        return normalize_dnnpremir(output_path, metadata_by_record)
-    if tool == "mirdnn":
-        return normalize_mirdnn(output_path, metadata_by_record, threshold)
-    if tool == "mire2e":
-        return normalize_mire2e(output_path, metadata_by_record, threshold)
-    if tool == "mustard":
-        return normalize_mustard(output_path, metadata_rows, threshold, mustard_positive_column)
-    raise RuntimeError(f"Unsupported tool: {tool}")
 
 
 def resolve_result_path(tool, results_dir, output_name):
     base = Path(results_dir) / tool / output_name
-    if tool == "mustard":
-        matches = sorted(base.glob("predict/static/results/intermediate_files/*.predictions.txt.gz"))
-        if len(matches) != 1:
-            raise FileNotFoundError(f"Expected one MuStARD predictions file under {base}, found {len(matches)}")
-        return matches[0]
-
-    relative = RESULT_FILES[tool]
-    output_path = base / relative
+    output_path = base / "predictions.csv"
     if not output_path.exists():
         raise FileNotFoundError(f"Missing output for {tool}: {output_path}")
     return output_path

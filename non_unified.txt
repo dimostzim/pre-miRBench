@@ -1,0 +1,200 @@
+NON-UNIFIED OUTPUT FORMATS — pre-miRNA prediction tools
+Input context: 200 nt sliding windows from a folded chromosome (FASTA file, one record per window)
+Tools covered: mire2e, mirdnn, dnnpremir, deepmir, deepmirgene, mustard (all 6 tools in the benchmark)
+================================================================================
+
+--- 1. mire2e ---
+Output file: predictions.json
+
+Format: JSON object with a single "predictions" key containing a list of objects.
+Each object corresponds to one sub-window that mire2e generates internally from each
+input FASTA record using its own sliding window (default length=100 nt, step=20 nt;
+benchmark uses step=100). For a 200 nt input window, mire2e will emit ~2 sub-window
+entries per FASTA record.
+
+Fields per entry:
+  "window"    : integer — index of the sub-window within the parent FASTA record
+  "score_5_3" : float [0, 1] — pre-miRNA probability in the 5'→3' direction
+  "score_3_5" : float [0, 1] — pre-miRNA probability in the 3'→5' direction (reverse complement)
+
+Example:
+  {
+    "predictions": [
+      { "window": 0, "score_5_3": 0.9821, "score_3_5": 0.0043 },
+      { "window": 1, "score_5_3": 0.1102, "score_3_5": 0.0012 },
+      ...
+    ]
+  }
+
+Caveats:
+  - Output is keyed by sub-window index, NOT by the FASTA sequence ID.
+  - Because mire2e does internal re-windowing, there is no direct 1-to-1 mapping
+    between input FASTA records and output entries without tracking per-record offset.
+  - Two scores per entry (both directions); no single binary label.
+
+
+--- 2. mirdnn ---
+Output file: predictions.csv
+
+Format: Plain CSV with NO header row. One line per input FASTA record.
+
+Columns (positional):
+  col 1: sequence_id — the FASTA record header (e.g. "chrIV|1021201-1021400|-")
+  col 2: prediction_score — float [0, 1], probability of being a pre-miRNA
+
+Example:
+  chrIV|1021201-1021400|-,0.0006367071182467043
+  chrIV|1021251-1021450|-,1.09732181954314e-05
+  chrIV|1021301-1021500|+,0.06247837096452713
+
+Caveats:
+  - No header row — parsers must not treat the first line as column names.
+  - Internally runs RNAfold if no pre-computed fold is provided (can be bypassed
+    with --input_fold). Truncates/pads sequences to seq_length (default 160 nt);
+    at 200 nt input this means the last 40 nt are truncated unless seq_length is
+    overridden.
+  - Continuous probability score, no binary label.
+
+
+--- 3. dnnpremir ---
+Output file: predictions.txt
+
+Format: Multi-line block per input sequence, separated by a line of "=".
+Each block contains exactly 3 lines:
+  line 1: ">sequence_id"       — FASTA-style header with leading ">"
+  line 2: "SEQUENCE  True/False" — the RNA sequence (U-based), two spaces, then
+                                   the binary prediction label
+  line 3: "==========================="  — separator (27 "=" characters)
+
+Label values:
+  True  = predicted pre-miRNA
+  False = predicted non-pre-miRNA
+
+Example:
+  >chrIV|1021201-1021400|-
+  UCUCAUGAAGAAAGGGGAAAUUUU...  False
+  ===========================
+  >chrIV|1021301-1021500|+
+  GGUGAAGCACAACCGCUCAUCUCU...  True
+  ===========================
+
+Caveats:
+  - Binary output only — no probability or confidence score.
+  - Internally runs RNAfold and uses a CNN model fixed to 180 nt; sequences longer
+    than 180 nt are silently truncated. At 200 nt input, the last 20 nt are dropped.
+  - Sequence in the output is the (possibly truncated) input sequence, not a
+    sub-window.
+
+
+--- 4. deepmir ---
+Output file: results.csv
+Side outputs: images/ (PNG per sequence), images.npz, names.npz
+
+Format: CSV with header row. One data row per successfully processed input sequence.
+Sequences for which a hairpin image could not be generated are silently skipped.
+
+Header: hairpin,sequence,fold,label
+
+Columns:
+  hairpin  : sequence ID from FASTA header
+  sequence : full RNA sequence (U-based) as passed to RNAfold via the Java JAR
+  fold     : dot-bracket secondary structure string returned by the hairpin image
+             generator (not a raw RNAfold output — comes from the Java ImageCalc.jar)
+  label    : string — "pre-miRNA" or "not pre-miRNA"
+
+Example:
+  hairpin,sequence,fold,label
+  chrV|5440601-5440800|-,UCAAUUUGCAAAAAUGUA...,......((((....))))...,pre-miRNA
+  chrV|5780501-5780700|+,UUAUAAUGAGAAACGACU...,...........(((...)))...,not pre-miRNA
+
+Caveats:
+  - Binary output only — no probability score; model internally uses argmax over
+    2-class softmax but only writes the winning class label.
+  - Requires Java (ImageCalc.jar) to generate 25×100 pixel hairpin PNG images;
+    sequences that fail image generation are omitted from results.csv entirely
+    (silent drop, no placeholder row).
+  - The "fold" column comes from the Java hairpin generator stdout, not directly
+    from RNAfold — may differ from a raw RNAfold output.
+  - Sequence length is not fixed: deepmir processes whatever length is given,
+    but the image is always rendered at 25×100 pixels regardless of input length,
+    so very long sequences may produce distorted representations.
+
+
+--- 5. mustard ---
+Output file: predict/static/results/intermediate_files/<prefix>.predictions.txt.gz
+             (gzip-compressed; exact filename matched by glob at eval time)
+
+Input requirements: mustard takes a BED file (not a plain FASTA) plus a genome FASTA and a
+PhyloP conservation directory. The benchmark prepares both FASTA and BED files from the same
+source records and runs mustard with staticPredFlag=1 (static prediction mode), which scores
+each BED interval as-is rather than doing an internal sliding window scan.
+Input is pre-resized to 100 nt (FIXED_LENGTHS["mustard"] = 100) around the miRNA target locus.
+
+Format: Gzip-compressed plain text. One tab-separated line per input BED interval, positional
+(no header, no sequence IDs). With classNum=2 there are 2 tab-separated float columns per line.
+
+Columns:
+  col 0 (class_0): float — score for the negative class (non-pre-miRNA)
+  col 1 (class_1): float — score for the positive class (pre-miRNA)
+
+The benchmark uses col 1 as the prediction score (mustard_positive_column=1).
+
+Example (3 intervals, 2-class output):
+  0.0123\t0.9877
+  0.8451\t0.1549
+  0.3210\t0.6790
+
+Caveats:
+  - No sequence IDs — alignment to input records is purely positional
+    (line N of file → record N of the BED/metadata file).
+  - Requires a full genome FASTA and PhyloP conservation files (not pre-computed
+    RNAfold); the benchmark provides these from its own data directory.
+  - Uses staticPredFlag=1, so mustard does NOT do its own internal windowing;
+    it scores each BED interval directly.
+  - Output is compressed (.gz); must be opened with gzip.open.
+  - Both columns sum to ~1.0 per row (softmax outputs); col 1 is the pre-miRNA score.
+
+
+--- 6. deepmirgene ---
+Output file: predictions.txt
+
+Format: Plain text, one integer per line. No sequence IDs. No header.
+One line per input FASTA record, in the same order as the input file.
+
+Values:
+  1 = predicted pre-miRNA
+  0 = predicted non-pre-miRNA
+
+Example (500-line file for 500 input windows):
+  1
+  1
+  0
+  1
+  0
+  ...
+
+Caveats:
+  - No sequence IDs in the output — alignment to input sequences is purely
+    positional (line N of output → record N of input FASTA).
+  - Binary output only — no probability score.
+  - Uses an LSTM RNN (Theano/Keras backend) with model new_test.hdf5; internally
+    handles its own sequence encoding and does not require a pre-folded input.
+  - Input sequences should be ≤200 nt; the model was trained on shorter pre-miRNA
+    hairpin sequences, so 200 nt windows may include flanking context that the
+    model was not designed for.
+
+================================================================================
+SUMMARY TABLE
+
+Tool         | Output file                    | Format          | Score type     | Has seq ID | One-to-one
+-------------|--------------------------------|-----------------|----------------|------------|------------
+mire2e       | predictions.json               | JSON list       | float [0,1]x2  | NO (index) | NO (sub-windows)
+mirdnn       | predictions.csv                | CSV no header   | float [0,1]    | YES        | YES
+dnnpremir    | predictions.txt                | block text      | True/False     | YES        | YES*
+deepmir      | results.csv                    | CSV w/ header   | pre/not label  | YES        | YES* (drops failures)
+mustard      | *.predictions.txt.gz           | TSV gzipped     | float [0,1]    | NO         | YES (positional)
+deepmirgene  | predictions.txt                | plain int/line  | 0 or 1         | NO         | YES (positional)
+
+* dnnpremir silently truncates to 180 nt; deepmir silently drops sequences that
+  fail hairpin image generation.
+  mustard input is resized to 100 nt (not 200 nt) and requires BED + genome + conservation.

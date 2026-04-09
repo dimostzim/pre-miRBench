@@ -20,7 +20,7 @@ def main():
     os.makedirs(args.output, exist_ok=True)
 
     input_path = os.path.abspath(args.input)
-    output_file = os.path.join(os.path.abspath(args.output), "predictions.txt")
+    output_file = os.path.join(os.path.abspath(args.output), "predictions.csv")
 
     target_model_path = os.path.join(inference_dir, "model", "new_test.hdf5")
     restore_backup = None

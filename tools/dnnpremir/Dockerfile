@@ -28,6 +28,9 @@ ENV LD_LIBRARY_PATH="/opt/conda/envs/dnnpremir/lib"
 
 RUN git clone https://github.com/zhengxueming/dnnPreMiR.git dnnpremir_src
 
+COPY patch_upstream.py ./
+RUN python /opt/dnnpremir/patch_upstream.py
+
 COPY inference.py ./
 
 WORKDIR /work

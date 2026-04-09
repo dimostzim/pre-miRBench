@@ -26,6 +26,9 @@ RUN mamba env create \
 ENV PATH="/opt/conda/envs/deepmir/bin:${PATH}"
 
 RUN git clone https://github.com/jacordero/deepmir.git deepmir_src
+
+COPY patch_upstream.py ./
+RUN python /opt/deepmir/patch_upstream.py
 RUN ln -sf /opt/deepmir/deepmir_src/hairpin_image_generator/bin/Linux/RNAfold \
         /opt/deepmir/deepmir_src/hairpin_image_generator/bin/RNAShapes.exe && \
     chmod +x /opt/deepmir/deepmir_src/hairpin_image_generator/bin/RNAShapes.exe

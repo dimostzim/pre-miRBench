@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 import argparse
+import csv
+import glob
+import gzip
 import os
 import subprocess
 
@@ -61,6 +64,49 @@ def main():
         cmd.extend(["--intermDir", os.path.abspath(args.intermDir)])
 
     subprocess.check_call(cmd)
+
+    # --- Post-processing: write unified predictions.csv ---
+    # Read record IDs grouped by chromosome (preserving per-chrom order from BED).
+    chrom_records = {}  # chrom -> list of record_ids in BED order
+    all_record_ids = []  # global order from BED
+    chrom_order_global = {}  # record_id -> global index
+    with open(os.path.abspath(args.targetIntervals)) as bed_fh:
+        for line in bed_fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) >= 4:
+                chrom = parts[0]
+                rid = parts[3]
+                chrom_records.setdefault(chrom, []).append(rid)
+                chrom_order_global[rid] = len(all_record_ids)
+                all_record_ids.append(rid)
+
+    # Build a score dict: record_id -> score, reading per-chromosome prediction files.
+    pred_base = os.path.join(os.path.abspath(args.dir),
+                             "predict", "static", "results", "intermediate_files")
+    scores_by_id = {}
+    for chrom, chrom_ids in chrom_records.items():
+        gz_path = os.path.join(pred_base, f"targets.{chrom}.predictions.txt.gz")
+        chrom_scores = []
+        with gzip.open(gz_path, "rt") as gz_fh:
+            for raw_line in gz_fh:
+                line = raw_line.strip()
+                if line:
+                    cols = [float(v) for v in line.split("\t") if v]
+                    chrom_scores.append(cols[1])
+        if len(chrom_scores) != len(chrom_ids):
+            raise RuntimeError(
+                f"mustard ID/score count mismatch on {chrom}: "
+                f"{len(chrom_ids)} IDs vs {len(chrom_scores)} scores"
+            )
+        for rid, score in zip(chrom_ids, chrom_scores):
+            scores_by_id[rid] = score
+
+    csv_path = os.path.join(os.path.abspath(args.dir), "predictions.csv")
+    with open(csv_path, "w", newline="") as csv_fh:
+        writer = csv.writer(csv_fh)
+        writer.writerow(["window_id", "probability_score"])
+        for rid in all_record_ids:
+            writer.writerow([rid, scores_by_id[rid]])
 
 
 if __name__ == "__main__":

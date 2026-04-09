@@ -1,0 +1,3 @@
+# dnnPreMiR C. elegans 1:1 configuration
+
+input: benchmark/prepared_inputs/cel_balanced/dnnpremir/cel_balanced.fa
