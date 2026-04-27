@@ -17,7 +17,12 @@ def main():
     p.add_argument("--device", default="cpu", help="Device to use (cpu, cuda:0, etc.)")
     p.add_argument("--batch_size", type=int, default=1024, help="Batch size for inference")
     p.add_argument("--input_fold", default=None, help="Precomputed RNAfold output (skip RNAfold)")
+    p.add_argument(
+        "--norm-output", dest="norm_output", default="y", choices=["y", "n"],
+        help="y: unified predictions.csv with header; n: original headerless predictions.csv",
+    )
     args = p.parse_args()
+    norm_output = args.norm_output.lower() == "y"
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     # Prefer bundled source inside the Docker image if present.
@@ -61,13 +66,15 @@ def main():
 
     subprocess.check_call(cmd)
 
-    # Add header row to the headerless CSV produced by the upstream script
-    with open(output_file, newline="") as f:
-        rows = list(csv.reader(f))
-    with open(output_file, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["window_id", "probability_score"])
-        writer.writerows(rows)
+    if norm_output:
+        # Add header row to the headerless CSV produced by the upstream script
+        with open(output_file, newline="") as f:
+            rows = list(csv.reader(f))
+        with open(output_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["window_id", "probability_score"])
+            writer.writerows(rows)
+    # norm_output=False: leave the upstream headerless predictions.csv as-is
 
 
 if __name__ == "__main__":

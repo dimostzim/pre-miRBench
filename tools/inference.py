@@ -83,7 +83,12 @@ def main():
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     p.add_argument("--config", help="Optional explicit config file path; defaults to configs/<tool>_config.yaml")
+    p.add_argument(
+        "--norm-output", dest="norm_output", default="y", choices=["y", "n"],
+        help="y (default): unified predictions.csv; n: original tool-native output format",
+    )
     args = p.parse_args()
+    norm_output = args.norm_output.lower() == "y"
 
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(tools_dir)
@@ -147,10 +152,15 @@ def main():
             shutil.rmtree(deepmir_input_user_data_dir)
         cmd.extend(["-v", f"{deepmir_user_data_dir}:/opt/deepmir/deepmir_src/user_data"])
         cmd.extend(["-v", f"{deepmir_runtime_predictor}:/opt/deepmir/deepmir_src/predictor.py:ro"])
+        # Pass norm-output choice to runtime_predictor.py via environment variable
+        cmd.extend(["-e", f"DEEPMIR_NORM_OUTPUT={args.norm_output}"])
     elif args.tool == "deepmirgene":
         deepmirgene_results_dir = os.path.join(repo_root, "results", "deepmirgene", "_scratch_results")
         os.makedirs(deepmirgene_results_dir, exist_ok=True)
         cmd.extend(["-v", f"{deepmirgene_results_dir}:/opt/deepmirgene/deepmirgene_src/inference/results"])
+        # Volume-mount inference.py so --norm-output takes effect without rebuilding
+        deepmirgene_runtime_inference = os.path.join(repo_root, "tools", "deepmirgene", "inference.py")
+        cmd.extend(["-v", f"{deepmirgene_runtime_inference}:/opt/deepmirgene/inference.py:ro"])
     elif args.tool == "mirdnn":
         # Volume-mount the local inference.py so image rebuild isn't required
         mirdnn_runtime_inference = os.path.join(repo_root, "tools", "mirdnn", "inference.py")
@@ -161,6 +171,9 @@ def main():
             shutil.rmtree(dnnpremir_temp_dir)
         os.makedirs(dnnpremir_temp_dir, exist_ok=True)
         cmd.extend(["-v", f"{dnnpremir_temp_dir}:/opt/dnnpremir/dnnpremir_src/temp"])
+        # Volume-mount inference.py so --norm-output takes effect without rebuilding
+        dnnpremir_runtime_inference = os.path.join(repo_root, "tools", "dnnpremir", "inference.py")
+        cmd.extend(["-v", f"{dnnpremir_runtime_inference}:/opt/dnnpremir/inference.py:ro"])
     elif args.tool == "mire2e":
         checkpoint_dir = os.path.join(tool_cache_dir, "torch", "hub", "checkpoints")
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -210,6 +223,7 @@ def main():
         cmd.extend(["--length", str(config["length"])])
         cmd.extend(["--step", str(config["step"])])
         cmd.extend(["--batch_size", str(config["batch_size"])])
+        cmd.extend(["--norm-output", args.norm_output])
 
     elif args.tool == "mirdnn":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
@@ -218,28 +232,33 @@ def main():
         cmd.extend(["--seq_length", str(config["seq_length"])])
         cmd.extend(["--device", config["device"]])
         cmd.extend(["--batch_size", str(config["batch_size"])])
+        cmd.extend(["--norm-output", args.norm_output])
 
     elif args.tool == "dnnpremir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
         if "seq_length" in config and config["seq_length"] is not None:
             cmd.extend(["--seq_length", str(config["seq_length"])])
+        cmd.extend(["--norm-output", args.norm_output])
 
     elif args.tool == "deepmir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
         cmd.extend(["--model", config["model"]])
+        # norm-output is passed via DEEPMIR_NORM_OUTPUT env var (set above in docker flags)
 
     elif args.tool == "deepmirgene":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
         if config.get("model"):
             cmd.extend(["--model", f"{path_prefix}{config['model']}"])
+        cmd.extend(["--norm-output", args.norm_output])
 
     subprocess.check_call(cmd)
 
     # Mustard post-processing: aggregate per-chromosome prediction files → predictions.csv
-    if args.tool == "mustard":
+    # Skipped when --norm-output n (native output is the per-chromosome .predictions.txt.gz files).
+    if args.tool == "mustard" and norm_output:
         import csv as _csv
         import glob as _glob
         import gzip as _gzip

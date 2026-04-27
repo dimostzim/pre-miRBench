@@ -127,22 +127,42 @@ def compute_predictions(data_directory, seq_fold_dict):
     raw_preds = model.predict(images)  # shape (n, 2); col 1 = pre-miRNA
 
     import csv as _csv
-    results_filename = data_directory + "/predictions.csv"
-    with open(results_filename, "w", newline="") as results:
-        _w = _csv.writer(results)
-        _w.writerow(["window_id", "probability_score"])
-        for name, pred_row in zip(names.tolist(), raw_preds.tolist()):
-            name = name.decode("utf-8")
-            _w.writerow([name, float(pred_row[1])])
+    norm_output = os.environ.get("DEEPMIR_NORM_OUTPUT", "y").lower() == "y"
+
+    if norm_output:
+        results_filename = data_directory + "/predictions.csv"
+        with open(results_filename, "w", newline="") as results:
+            _w = _csv.writer(results)
+            _w.writerow(["window_id", "probability_score"])
+            for name, pred_row in zip(names.tolist(), raw_preds.tolist()):
+                name = name.decode("utf-8")
+                _w.writerow([name, float(pred_row[1])])
+    else:
+        # Original format: results.csv with hairpin, sequence, fold, label
+        results_filename = data_directory + "/results.csv"
+        with open(results_filename, "w", newline="") as results:
+            _w = _csv.writer(results)
+            _w.writerow(["hairpin", "sequence", "fold", "label"])
+            for name, pred_row in zip(names.tolist(), raw_preds.tolist()):
+                name = name.decode("utf-8")
+                label = "pre-miRNA" if pred_row[1] >= 0.5 else "not pre-miRNA"
+                sequence, fold = seq_fold_dict.get(name, ("", ""))
+                _w.writerow([name, sequence, fold, label])
 
     print("Prediction results were written to: {}".format(results_filename))
 
 
 def write_empty_results(data_directory):
     import csv as _csv
-    results_filename = data_directory + "/predictions.csv"
-    with open(results_filename, "w", newline="") as results:
-        _csv.writer(results).writerow(["window_id", "probability_score"])
+    norm_output = os.environ.get("DEEPMIR_NORM_OUTPUT", "y").lower() == "y"
+    if norm_output:
+        results_filename = data_directory + "/predictions.csv"
+        with open(results_filename, "w", newline="") as results:
+            _csv.writer(results).writerow(["window_id", "probability_score"])
+    else:
+        results_filename = data_directory + "/results.csv"
+        with open(results_filename, "w", newline="") as results:
+            _csv.writer(results).writerow(["hairpin", "sequence", "fold", "label"])
     print("No valid DeepMir hairpin images were generated; wrote empty results to: {}".format(results_filename))
 
 
