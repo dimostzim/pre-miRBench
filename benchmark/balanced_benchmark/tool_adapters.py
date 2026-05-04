@@ -19,6 +19,7 @@ RESULT_FILES = {
     "mirdnn": "predictions.csv",
     "mire2e": "predictions.json",
 }
+UNIFIED_RESULT_FILE = "unified_predictions.csv"
 
 
 def parse_tools(value):
@@ -441,6 +442,45 @@ def normalize_mustard(output_path, metadata_rows, threshold, positive_column):
     return rows
 
 
+def normalize_unified_output(output_path, metadata_by_record, threshold):
+    rows = []
+    seen = set()
+    with open(output_path, newline="") as handle:
+        reader = csv.DictReader(handle)
+        expected_fields = {"window_id", "probability_score"}
+        if not reader.fieldnames or not expected_fields <= set(reader.fieldnames):
+            raise RuntimeError(f"{output_path} must have columns: window_id, probability_score")
+
+        for row in reader:
+            record_id = row["window_id"]
+            if record_id in seen:
+                raise RuntimeError(f"{output_path}: duplicate window_id {record_id}")
+            if record_id not in metadata_by_record:
+                raise RuntimeError(f"{output_path}: unknown window_id {record_id}")
+
+            score = float(row["probability_score"])
+            if not 0.0 <= score <= 1.0:
+                raise RuntimeError(f"{output_path}: probability_score outside [0, 1] for {record_id}: {score}")
+
+            meta = metadata_by_record[record_id]
+            rows.append({
+                "record_id": record_id,
+                "window_id": meta["window_id"],
+                "score": score,
+                "predicted_class": 1 if score >= threshold else 0,
+                "ground_truth_class": gt_to_int(meta["label"]),
+            })
+            seen.add(record_id)
+
+    missing = sorted(set(metadata_by_record) - seen)
+    if missing:
+        preview = ", ".join(missing[:5])
+        suffix = "" if len(missing) <= 5 else f", ... ({len(missing)} total)"
+        raise RuntimeError(f"{output_path}: missing predictions for {preview}{suffix}")
+
+    return rows
+
+
 def normalize_tool_output(tool, output_path, metadata_path, threshold=0.5, mustard_positive_column=1):
     metadata_rows, metadata_by_record = load_metadata(metadata_path)
     output_path = Path(output_path)
@@ -472,4 +512,14 @@ def resolve_result_path(tool, results_dir, output_name):
     output_path = base / relative
     if not output_path.exists():
         raise FileNotFoundError(f"Missing output for {tool}: {output_path}")
+    return output_path
+
+
+def resolve_unified_result_path(tool, results_dir, output_name):
+    output_path = Path(results_dir) / tool / output_name / UNIFIED_RESULT_FILE
+    if not output_path.exists():
+        raise FileNotFoundError(
+            f"Missing unified output for {tool}: {output_path}. "
+            "Run tool inference with --norm-output y first."
+        )
     return output_path

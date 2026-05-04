@@ -124,7 +124,8 @@ def compute_predictions(data_directory, seq_fold_dict):
     names = np.load(data_directory + "/names.npz")["arr_0"]
 
     model = load_model(MODEL_FILENAME)
-    predictions = np.argmax(model.predict(images), axis=1)
+    raw_predictions = model.predict(images)
+    predictions = np.argmax(raw_predictions, axis=1)
 
     results_filename = data_directory + "/results.csv"
     with open(results_filename, "w") as results:
@@ -138,11 +139,28 @@ def compute_predictions(data_directory, seq_fold_dict):
 
     print("Prediction results were written to: {}".format(results_filename))
 
+    unified_outfile = os.environ.get("PREMIRBENCH_UNIFIED_OUTPUT")
+    if unified_outfile:
+        import csv as _csv
+        with open(unified_outfile, "w", newline="") as unified:
+            writer = _csv.writer(unified)
+            writer.writerow(["window_id", "probability_score"])
+            for name, pred_row in zip(names.tolist(), raw_predictions.tolist()):
+                name = name.decode("utf-8")
+                writer.writerow([name, float(pred_row[1])])
+        print("Unified prediction results were written to: {}".format(unified_outfile))
+
 
 def write_empty_results(data_directory):
     results_filename = data_directory + "/results.csv"
     with open(results_filename, "w") as results:
         results.write("hairpin,sequence,fold,label\n")
+    unified_outfile = os.environ.get("PREMIRBENCH_UNIFIED_OUTPUT")
+    if unified_outfile:
+        import csv as _csv
+        with open(unified_outfile, "w", newline="") as unified:
+            writer = _csv.writer(unified)
+            writer.writerow(["window_id", "probability_score"])
     print("No valid DeepMir hairpin images were generated; wrote empty results to: {}".format(results_filename))
 
 

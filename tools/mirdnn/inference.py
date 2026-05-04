@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import csv
 import os
 import subprocess
 import sys
@@ -15,6 +16,7 @@ def main():
     p.add_argument("--device", default="cpu", help="Device to use (cpu, cuda:0, etc.)")
     p.add_argument("--batch_size", type=int, default=1024, help="Batch size for inference")
     p.add_argument("--input_fold", default=None, help="Precomputed RNAfold output (skip RNAfold)")
+    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="Also write unified_predictions.csv with window_id,probability_score",)
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +54,22 @@ def main():
     ]
 
     subprocess.check_call(cmd)
+
+    if args.norm_output == "y":
+        unified_file = os.path.join(os.path.abspath(args.output), "unified_predictions.csv")
+        with open(output_file, newline="") as src, open(unified_file, "w", newline="") as dst:
+            reader = csv.reader(src)
+            writer = csv.writer(dst)
+            writer.writerow(["window_id", "probability_score"])
+            seen = set()
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                record_id, score = row[0], row[1]
+                if record_id in seen:
+                    continue
+                seen.add(record_id)
+                writer.writerow([record_id, score])
 
 
 if __name__ == "__main__":

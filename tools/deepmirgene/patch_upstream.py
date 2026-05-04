@@ -101,6 +101,24 @@ def main() -> None:
         "  return [K.reshape(mul, (-1, flat_dim)), p_vector]\n",
     )
 
+    text = replace_once(
+        text,
+        " np.savetxt(OUTFILE, class_label, fmt='%d')\n",
+        " np.savetxt(OUTFILE, class_label, fmt='%d')\n"
+        " import os as _os\n"
+        " unified_outfile = _os.environ.get(\"PREMIRBENCH_UNIFIED_OUTPUT\")\n"
+        " if unified_outfile:\n"
+        "  import csv as _csv\n"
+        "  seq_ids = [record.id for record in SeqIO.parse(INFILE, \"fasta\")]\n"
+        "  if len(seq_ids) != len(predictions):\n"
+        "   raise RuntimeError(\"deepMiRGene ID/probability count mismatch: %d IDs vs %d predictions\" % (len(seq_ids), len(predictions)))\n"
+        "  with open(unified_outfile, \"w\", newline=\"\") as _fd:\n"
+        "   _w = _csv.writer(_fd)\n"
+        "   _w.writerow([\"window_id\", \"probability_score\"])\n"
+        "   for seq_id, pred_row in zip(seq_ids, predictions.tolist()):\n"
+        "    _w.writerow([seq_id, float(pred_row[0])])\n",
+    )
+
     PATCH_TARGET.write_text(text)
 
 

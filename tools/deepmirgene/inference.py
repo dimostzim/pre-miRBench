@@ -12,6 +12,7 @@ def main():
     p.add_argument("--input", required=True, help="Input FASTA file")
     p.add_argument("--output", default="results", help="Output directory")
     p.add_argument("--model", help="Optional custom model weights (.hdf5)")
+    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="Also write unified_predictions.csv with window_id,probability_score",)
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +48,11 @@ def main():
 
     env = os.environ.copy()
     env.setdefault("KERAS_BACKEND", "tensorflow")
+    if args.norm_output == "y":
+        env["PREMIRBENCH_UNIFIED_OUTPUT"] = os.path.join(
+            os.path.abspath(args.output),
+            "unified_predictions.csv",
+        )
 
     try:
         subprocess.check_call(cmd, cwd=inference_dir, env=env)

@@ -65,10 +65,23 @@ Run all tool wrappers:
 bash benchmark/balanced_benchmark/run_tools.sh
 ```
 
+To also produce additional unified probability files without replacing each tool's
+default output, run:
+
+```bash
+bash benchmark/balanced_benchmark/run_tools.sh --norm-output y
+```
+
 Normalize outputs and compute shared label-based metrics:
 
 ```bash
 python benchmark/balanced_benchmark/evaluate_outputs.py
+```
+
+Evaluate the unified probability files and include ROC-AUC:
+
+```bash
+python benchmark/balanced_benchmark/evaluate_outputs.py --norm-output y
 ```
 
 Create a 4-panel summary plot for precision, recall, specificity, and F1:
@@ -81,6 +94,7 @@ python benchmark/balanced_benchmark/plot_metrics.py
 
 - prepared inputs: `benchmark/prepared_inputs/balanced_benchmark/`
 - raw tool outputs: `results/{tool}/balanced_benchmark/`
+- additive unified probabilities: `results/{tool}/balanced_benchmark/unified_predictions.csv` when run with `--norm-output y`
 - normalized per-tool outputs: `benchmark/evaluated/balanced_benchmark/{tool}.csv`
 - summary metrics: `benchmark/evaluated/balanced_benchmark/metrics.csv`
 - summary plot: `benchmark/evaluated/balanced_benchmark/metrics_4panel.png`
@@ -99,8 +113,9 @@ The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positi
 
 ### Evaluation Notes
 
-- metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
-- MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
+- default metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
+- `--norm-output y` evaluates `unified_predictions.csv` and adds threshold-free ROC-AUC as `auc`
+- MuStARD is normalized using `class_1` as the positive pre-miRNA class
 - this benchmark is a candidate-level collapsed balanced benchmark derived from eligible 200 nt source windows, not the full chr14 truth set or the full scan benchmark
 
 ## Scan Benchmark
@@ -188,10 +203,10 @@ This benchmark is substantially heavier than the balanced benchmark. Start with 
 
 ### Balanced Evaluation Notes
 
-- score threshold is fixed at `0.5` for score-based tools
-- `deepmir`, `deepmirgene`, and `dnnpremir` only emit hard class labels in the current wrappers, so AUROC/AUPRC are not meaningful for them without exposing continuous scores
-- `mirdnn`, `mire2e`, and `mustard` emit continuous scores, so AUROC/AUPRC can be computed for those tools
-- MuStARD balanced predictions are two-column probabilities in `(class_0, class_1)` order; the positive pre-miRNA class is column `1`
+- score threshold is fixed at `0.5` unless overridden with `--threshold`
+- default tool outputs are left intact for compatibility
+- `--norm-output y` adds `unified_predictions.csv` with `window_id,probability_score`; balanced evaluation can compute ROC-AUC from that file
+- MuStARD balanced predictions are two-column probabilities in `(class_0, class_1)` order; the unified output uses column `1` as the positive pre-miRNA score
 
 ## Validation
 

@@ -14,6 +14,13 @@ def main():
     p.add_argument("--model", default="fine_tuned_cnn",
                    choices=["fine_tuned_cnn", "base_cnn"],
                    help="Pre-trained model to use")
+    p.add_argument(
+        "--norm-output",
+        "--norm_output",
+        choices=["y", "n"],
+        default="n",
+        help="Also write unified_predictions.csv with window_id,probability_score",
+    )
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -66,6 +73,11 @@ def main():
         env_bin = os.path.join(sys.prefix, "bin")
         env["PATH"] = env_bin + os.pathsep + env.get("PATH", "")
         env.setdefault("JAVA_HOME", sys.prefix)
+        if args.norm_output == "y":
+            env["PREMIRBENCH_UNIFIED_OUTPUT"] = os.path.join(
+                os.path.abspath(args.output),
+                "unified_predictions.csv",
+            )
 
         subprocess.check_call(cmd, cwd=deepmir_src, env=env)
 

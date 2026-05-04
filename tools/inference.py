@@ -83,6 +83,8 @@ def main():
     p.add_argument("--tool", required=True, choices=["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"])
     p.add_argument("--output-name", required=True, help="Subdirectory under results/<tool>/ to store this run")
     p.add_argument("--config", help="Optional explicit config file path; defaults to configs/<tool>_config.yaml")
+    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",
+        help="When 'y', also write results/<tool>/<output-name>/unified_predictions.csv without replacing default output files",)
     args = p.parse_args()
 
     tools_dir = os.path.dirname(os.path.abspath(__file__))
@@ -116,9 +118,10 @@ def main():
     tool_cache_dir = os.path.join(tool_home_dir, ".cache")
     os.makedirs(tool_home_dir, exist_ok=True)
     os.makedirs(tool_cache_dir, exist_ok=True)
+    docker_platform = os.environ.get("DOCKER_PLATFORM", "linux/amd64")
 
     cmd = [
-        "docker", "run", "--rm", "--gpus", "all",
+        "docker", "run", "--rm", "--platform", docker_platform, "--gpus", "all",
         "--user", f"{os.getuid()}:{os.getgid()}",
         "-e", f"HOME=/work/results/{args.tool}/_home",
         "-e", f"XDG_CACHE_HOME=/work/results/{args.tool}/_home/.cache",
@@ -216,6 +219,9 @@ def main():
         cmd.extend(["--output", output_path])
         if config.get("model"):
             cmd.extend(["--model", f"{path_prefix}{config['model']}"])
+
+    if args.norm_output == "y":
+        cmd.extend(["--norm-output", "y"])
 
     subprocess.check_call(cmd)
 

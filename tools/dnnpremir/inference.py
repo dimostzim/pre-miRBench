@@ -11,6 +11,7 @@ def main():
     p.add_argument("--input", required=True, help="Input FASTA file")
     p.add_argument("--output", default="results", help="Output directory")
     p.add_argument("--seq_length", type=int, default=180, help="Sequence length (fixed at 180, for documentation only)")
+    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="Also write unified_predictions.csv with window_id,probability_score",)
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -29,7 +30,14 @@ def main():
         "-o", output_file
     ]
 
-    subprocess.check_call(cmd, cwd=dnnpremir_src)
+    env = os.environ.copy()
+    if args.norm_output == "y":
+        env["PREMIRBENCH_UNIFIED_OUTPUT"] = os.path.join(
+            os.path.abspath(args.output),
+            "unified_predictions.csv",
+        )
+
+    subprocess.check_call(cmd, cwd=dnnpremir_src, env=env)
 
 
 if __name__ == "__main__":

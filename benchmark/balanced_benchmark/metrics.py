@@ -50,3 +50,31 @@ def compute_binary_metrics(rows):
         "f1": f1,
         "mcc": mcc,
     }
+
+
+def compute_roc_auc(rows):
+    scored = []
+    for row in rows:
+        if row.get("score") in ("", None):
+            return None
+        scored.append((float(row["score"]), int(row["ground_truth_class"])))
+
+    positives = sum(1 for _, label in scored if label == 1)
+    negatives = sum(1 for _, label in scored if label == 0)
+    if positives == 0 or negatives == 0:
+        return None
+
+    scored.sort(key=lambda item: item[0])
+    rank_sum_positive = 0.0
+    index = 0
+    while index < len(scored):
+        tie_end = index + 1
+        while tie_end < len(scored) and scored[tie_end][0] == scored[index][0]:
+            tie_end += 1
+
+        average_rank = (index + 1 + tie_end) / 2.0
+        positive_ties = sum(1 for _, label in scored[index:tie_end] if label == 1)
+        rank_sum_positive += positive_ties * average_rank
+        index = tie_end
+
+    return (rank_sum_positive - (positives * (positives + 1) / 2.0)) / (positives * negatives)

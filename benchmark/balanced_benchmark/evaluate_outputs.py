@@ -3,8 +3,15 @@ import argparse
 import csv
 from pathlib import Path
 
-from metrics import compute_binary_metrics
-from tool_adapters import normalize_tool_output, parse_tools, resolve_result_path
+from metrics import compute_binary_metrics, compute_roc_auc
+from tool_adapters import (
+    load_metadata,
+    normalize_tool_output,
+    normalize_unified_output,
+    parse_tools,
+    resolve_result_path,
+    resolve_unified_result_path,
+)
 
 
 def parse_args():
@@ -18,6 +25,7 @@ def parse_args():
     parser.add_argument("--tools", default="all", help="Comma-separated tool list or 'all'")
     parser.add_argument("--threshold", type=float, default=0.5, help="Classification threshold for score-based tools")
     parser.add_argument("--mustard-positive-column", type=int, default=1, help="MuStARD score column to treat as positive; raw predictions are written as class_0, class_1")
+    parser.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="When 'y', evaluate unified_predictions.csv and add threshold-free ROC-AUC to metrics.csv",)
     return parser.parse_args()
 
 
@@ -36,17 +44,19 @@ def write_rows(path, rows):
             })
 
 
-def append_metrics(path, tool, metrics):
+def append_metrics(path, tool, metrics, include_auc=False):
     fieldnames = [
         "tool", "n", "tp", "fp", "tn", "fn",
         "precision", "recall", "specificity", "accuracy", "f1", "mcc",
     ]
+    if include_auc:
+        fieldnames.append("auc")
     file_exists = path.exists()
     with path.open("a", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         if not file_exists:
             writer.writeheader()
-        writer.writerow({
+        row = {
             "tool": tool,
             "n": metrics["n"],
             "tp": metrics["tp"],
@@ -59,7 +69,10 @@ def append_metrics(path, tool, metrics):
             "accuracy": f"{metrics['accuracy']:.6f}",
             "f1": f"{metrics['f1']:.6f}",
             "mcc": f"{metrics['mcc']:.6f}",
-        })
+        }
+        if include_auc:
+            row["auc"] = "" if metrics["auc"] is None else f"{metrics['auc']:.6f}"
+        writer.writerow(row)
 
 
 def main():
@@ -78,18 +91,26 @@ def main():
         if not metadata_path.exists():
             raise FileNotFoundError(f"Missing metadata for {tool}: {metadata_path}")
 
-        raw_output = resolve_result_path(tool, results_dir, args.prefix)
-        rows = normalize_tool_output(
-            tool,
-            raw_output,
-            metadata_path,
-            threshold=args.threshold,
-            mustard_positive_column=args.mustard_positive_column,
-        )
+        if args.norm_output == "y":
+            raw_output = resolve_unified_result_path(tool, results_dir, args.prefix)
+            _, metadata_by_record = load_metadata(metadata_path)
+            rows = normalize_unified_output(raw_output, metadata_by_record, threshold=args.threshold)
+        else:
+            raw_output = resolve_result_path(tool, results_dir, args.prefix)
+            rows = normalize_tool_output(
+                tool,
+                raw_output,
+                metadata_path,
+                threshold=args.threshold,
+                mustard_positive_column=args.mustard_positive_column,
+            )
 
         normalized_path = output_dir / f"{tool}.csv"
         write_rows(normalized_path, rows)
-        append_metrics(metrics_path, tool, compute_binary_metrics(rows))
+        metrics = compute_binary_metrics(rows)
+        if args.norm_output == "y":
+            metrics["auc"] = compute_roc_auc(rows)
+        append_metrics(metrics_path, tool, metrics, include_auc=args.norm_output == "y")
         print(f"{tool}: {normalized_path}")
 
     print(f"metrics: {metrics_path}")
