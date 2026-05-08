@@ -19,7 +19,7 @@ def main():
         "--norm_output",
         choices=["y", "n"],
         default="n",
-        help="Also write unified_predictions.csv with window_id,probability_score",
+        help="Also write unified_predictions.csv with record_id,probability_score",
     )
     args = p.parse_args()
 

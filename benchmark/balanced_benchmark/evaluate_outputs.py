@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--tools", default="all", help="Comma-separated tool list or 'all'")
     parser.add_argument("--threshold", type=float, default=0.5, help="Classification threshold for score-based tools")
     parser.add_argument("--mustard-positive-column", type=int, default=1, help="MuStARD score column to treat as positive; raw predictions are written as class_0, class_1")
-    parser.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="When 'y', evaluate unified_predictions.csv and add threshold-free ROC-AUC to metrics.csv",)
+    parser.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="When 'y', evaluate unified_predictions.csv and add threshold-free ROC-AUC to metrics.unified.csv",)
     return parser.parse_args()
 
 
@@ -82,7 +82,7 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics_path = output_dir / "metrics.csv"
+    metrics_path = output_dir / ("metrics.unified.csv" if args.norm_output == "y" else "metrics.csv")
     if metrics_path.exists():
         metrics_path.unlink()
 
@@ -105,7 +105,8 @@ def main():
                 mustard_positive_column=args.mustard_positive_column,
             )
 
-        normalized_path = output_dir / f"{tool}.csv"
+        suffix = ".unified" if args.norm_output == "y" else ""
+        normalized_path = output_dir / f"{tool}{suffix}.csv"
         write_rows(normalized_path, rows)
         metrics = compute_binary_metrics(rows)
         if args.norm_output == "y":

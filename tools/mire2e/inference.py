@@ -22,7 +22,7 @@ def main():
     p.add_argument("--max_records", type=int, default=None,
                    help="Process at most this many sequences from a multi-record FASTA.")
     p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",
-                help="Also write unified_predictions.csv with window_id,probability_score",)
+                help="Also write unified_predictions.csv with record_id,probability_score",)
     args = p.parse_args()
 
     if not os.path.isdir(args.output):
@@ -77,7 +77,7 @@ def main():
         unified_file = os.path.join(args.output, "unified_predictions.csv")
         with open(unified_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["window_id", "probability_score"])
+            writer.writerow(["record_id", "probability_score"])
             for record_id in record_ids:
                 writer.writerow([record_id, best_score_by_record.get(record_id, 0.0)])
 

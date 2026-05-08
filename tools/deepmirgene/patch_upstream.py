@@ -114,7 +114,7 @@ def main() -> None:
         "   raise RuntimeError(\"deepMiRGene ID/probability count mismatch: %d IDs vs %d predictions\" % (len(seq_ids), len(predictions)))\n"
         "  with open(unified_outfile, \"w\", newline=\"\") as _fd:\n"
         "   _w = _csv.writer(_fd)\n"
-        "   _w.writerow([\"window_id\", \"probability_score\"])\n"
+        "   _w.writerow([\"record_id\", \"probability_score\"])\n"
         "   for seq_id, pred_row in zip(seq_ids, predictions.tolist()):\n"
         "    _w.writerow([seq_id, float(pred_row[0])])\n",
     )

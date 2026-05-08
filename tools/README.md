@@ -38,7 +38,7 @@ python tools/inference.py --tool {tool} --output-name my_run
 ```
 
 Add `--norm-output y` to also write `results/{tool}/my_run/unified_predictions.csv`
-with `window_id,probability_score`. This does not replace the tool's default
+with `record_id,probability_score`. This does not replace the tool's default
 output file.
 
 ## Configuration

@@ -44,7 +44,7 @@ def main() -> None:
         "            import csv as _csv\n"
         "            with open(unified_outfile, \"w\", newline=\"\") as _fd:\n"
         "                _w = _csv.writer(_fd)\n"
-        "                _w.writerow([\"window_id\", \"probability_score\"])\n"
+        "                _w.writerow([\"record_id\", \"probability_score\"])\n"
         "                for i in range(len(name_list)):\n"
         "                    record_id = name_list[i].strip().lstrip(\">\")\n"
         "                    _w.writerow([record_id, float(result[i][0])])\n",

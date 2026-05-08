@@ -29,7 +29,7 @@ def main():
     p.add_argument("--threads", type=int, default=10)
     p.add_argument("--step", type=int, default=5)
     p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",
-        help="Also write unified_predictions.csv with window_id,probability_score",)
+        help="Also write unified_predictions.csv with record_id,probability_score",)
     args = p.parse_args()
 
     perl_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mustard_src", "MuStARD.pl")
@@ -104,7 +104,7 @@ def main():
         unified_file = os.path.join(os.path.abspath(args.dir), "unified_predictions.csv")
         with open(unified_file, "w", newline="") as csv_fh:
             writer = csv.writer(csv_fh)
-            writer.writerow(["window_id", "probability_score"])
+            writer.writerow(["record_id", "probability_score"])
             for record_id, score in zip(record_ids, scores):
                 writer.writerow([record_id, score])
 

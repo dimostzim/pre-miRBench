@@ -12,7 +12,7 @@ def main():
     p.add_argument("--input", required=True, help="Input FASTA file")
     p.add_argument("--output", default="results", help="Output directory")
     p.add_argument("--model", help="Optional custom model weights (.hdf5)")
-    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="Also write unified_predictions.csv with window_id,probability_score",)
+    p.add_argument("--norm-output","--norm_output",choices=["y", "n"],default="n",help="Also write unified_predictions.csv with record_id,probability_score",)
     args = p.parse_args()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))

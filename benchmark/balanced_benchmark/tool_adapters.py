@@ -447,16 +447,16 @@ def normalize_unified_output(output_path, metadata_by_record, threshold):
     seen = set()
     with open(output_path, newline="") as handle:
         reader = csv.DictReader(handle)
-        expected_fields = {"window_id", "probability_score"}
+        expected_fields = {"record_id", "probability_score"}
         if not reader.fieldnames or not expected_fields <= set(reader.fieldnames):
-            raise RuntimeError(f"{output_path} must have columns: window_id, probability_score")
+            raise RuntimeError(f"{output_path} must have columns: record_id, probability_score")
 
         for row in reader:
-            record_id = row["window_id"]
+            record_id = row["record_id"]
             if record_id in seen:
-                raise RuntimeError(f"{output_path}: duplicate window_id {record_id}")
+                raise RuntimeError(f"{output_path}: duplicate record_id {record_id}")
             if record_id not in metadata_by_record:
-                raise RuntimeError(f"{output_path}: unknown window_id {record_id}")
+                raise RuntimeError(f"{output_path}: unknown record_id {record_id}")
 
             score = float(row["probability_score"])
             if not 0.0 <= score <= 1.0:

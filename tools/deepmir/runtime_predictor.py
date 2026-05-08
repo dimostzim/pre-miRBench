@@ -144,7 +144,7 @@ def compute_predictions(data_directory, seq_fold_dict):
         import csv as _csv
         with open(unified_outfile, "w", newline="") as unified:
             writer = _csv.writer(unified)
-            writer.writerow(["window_id", "probability_score"])
+            writer.writerow(["record_id", "probability_score"])
             for name, pred_row in zip(names.tolist(), raw_predictions.tolist()):
                 name = name.decode("utf-8")
                 writer.writerow([name, float(pred_row[1])])
@@ -160,7 +160,7 @@ def write_empty_results(data_directory):
         import csv as _csv
         with open(unified_outfile, "w", newline="") as unified:
             writer = _csv.writer(unified)
-            writer.writerow(["window_id", "probability_score"])
+            writer.writerow(["record_id", "probability_score"])
     print("No valid DeepMir hairpin images were generated; wrote empty results to: {}".format(results_filename))
 
 
