@@ -177,15 +177,26 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
     if tool == "mire2e":
         for key, flag in (
             ("pretrained", "--pretrained"),
+            ("train_structure", "--train_structure"),
+            ("train_mfe", "--train_mfe"),
             ("length", "--length"),
             ("structure_model", "--structure_model"),
             ("mfe_model", "--mfe_model"),
             ("predictor_model", "--predictor_model"),
+            ("structure_training_fasta", "--structure_training_fasta"),
+            ("mfe_training_fasta", "--mfe_training_fasta"),
         ):
             value = config.get(key)
-            if key.endswith("_model") and value:
+            if (key.endswith("_model") or key.endswith("_fasta")) and value:
                 value = container_path(repo_root, require_file(repo_root, config, key), mounts)
             add_optional_arg(cmd, flag, value)
+        for key, flag in (
+            ("structure_batch_size", "--structure_batch_size"),
+            ("mfe_batch_size", "--mfe_batch_size"),
+            ("structure_epochs", "--structure_epochs"),
+            ("mfe_epochs", "--mfe_epochs"),
+        ):
+            add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)
 
     elif tool == "mirdnn":
@@ -200,10 +211,16 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
         add_common_training_args(cmd, config)
 
     elif tool == "dnnpremir":
-        positive = require_file(repo_root, config, "positive_csv")
-        negative = require_file(repo_root, config, "negative_csv")
-        cmd.extend(["--positive_csv", container_path(repo_root, positive, mounts)])
-        cmd.extend(["--negative_csv", container_path(repo_root, negative, mounts)])
+        if config.get("positive_csv") and config.get("negative_csv"):
+            positive = require_file(repo_root, config, "positive_csv")
+            negative = require_file(repo_root, config, "negative_csv")
+            cmd.extend(["--positive_csv", container_path(repo_root, positive, mounts)])
+            cmd.extend(["--negative_csv", container_path(repo_root, negative, mounts)])
+        else:
+            positive = require_file(repo_root, config, "positive_fasta")
+            negative = require_file(repo_root, config, "negative_fasta")
+            cmd.extend(["--positive_fasta", container_path(repo_root, positive, mounts)])
+            cmd.extend(["--negative_fasta", container_path(repo_root, negative, mounts)])
         for key, flag in (("architecture", "--architecture"),):
             add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)

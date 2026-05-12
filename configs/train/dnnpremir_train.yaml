@@ -1,8 +1,13 @@
 # dnnPreMiR retraining configuration.
-# positive_csv and negative_csv must contain a seq_struc column using dnnPreMiR's
-# sequence/structure tokens, e.g. "A. U( G(".
-positive_csv: data/train/dnnpremir_positive.csv
-negative_csv: data/train/dnnpremir_negative.csv
+# The wrapper folds FASTA inputs with RNAfold and generates the seq_struc CSVs
+# expected by upstream dnnPreMiR.
+positive_fasta: data/train/positive.fa
+negative_fasta: data/train/negative.fa
+
+# Optional: use precomputed CSVs instead of FASTA. Each CSV must contain a
+# seq_struc column using dnnPreMiR tokens, e.g. "A. U( G(".
+positive_csv: null
+negative_csv: null
 
 architecture: cnn
 batch_size: 200

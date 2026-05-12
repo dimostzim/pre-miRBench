@@ -46,8 +46,10 @@ python tools/train.py --tool {tool} --run-name my_model --config configs/train/{
 ```
 
 The training configs are examples for user-supplied inputs. FASTA-native tools
-use positive/negative FASTA files; dnnPreMiR uses positive/negative CSV files
-with `seq_struc`; MuStARD uses its native interval/genome/conservation inputs.
+use positive/negative FASTA files; dnnPreMiR folds FASTA inputs and generates
+its `seq_struc` CSV representation unless precomputed CSVs are supplied; miRe2e
+can generate its structure/MFE training representation and retrain all three
+stages. MuStARD uses its native interval/genome/conservation inputs.
 After a successful run, `inference_config.yaml` is written in the training
 result directory and can be passed to `tools/inference.py`.
 

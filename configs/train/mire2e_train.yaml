@@ -7,9 +7,17 @@ validation_negative_fasta: null
 
 device: cuda
 pretrained: hsa
+train_structure: true
+train_mfe: true
+structure_training_fasta: null
+mfe_training_fasta: null
 length: 100
 batch_size: 32
+structure_batch_size: 32
+mfe_batch_size: 32
 epochs: 150
+structure_epochs: 200
+mfe_epochs: 200
 seed: 42
 
 # Optional inference input for the generated inference_config.yaml.
