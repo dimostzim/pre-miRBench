@@ -3,6 +3,7 @@ import argparse
 import csv
 import os
 import random
+import subprocess
 import sys
 
 import numpy as np
@@ -44,6 +45,67 @@ def read_csv_examples(path, label):
     return examples
 
 
+def read_fasta(path):
+    name = None
+    parts = []
+    with open(path) as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if name is not None:
+                    yield name, "".join(parts)
+                name = line[1:].split()[0]
+                parts = []
+            else:
+                parts.append(line)
+    if name is not None:
+        yield name, "".join(parts)
+
+
+def fold_sequence(name, sequence):
+    rnafold = os.path.join(os.path.dirname(sys.executable), "RNAfold")
+    clean_sequence = sequence.upper().replace("T", "U")
+    process = subprocess.run(
+        [rnafold, "--noPS"],
+        input=f">{name}\n{clean_sequence}\n",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    lines = [line.strip() for line in process.stdout.splitlines() if line.strip()]
+    if len(lines) < 3:
+        raise ValueError(f"RNAfold produced unexpected output for {name}: {process.stdout}")
+    return lines[1], lines[2].split()[0]
+
+
+def seq_struct_value(sequence, structure):
+    return " ".join(sequence[i] + structure[i] for i in range(min(len(sequence), len(structure))))
+
+
+def fasta_to_csv(fasta_path, csv_path, label):
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    count = 0
+    with open(csv_path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["Accession", "seq_struc", "Classification"])
+        writer.writeheader()
+        for name, sequence in read_fasta(fasta_path):
+            folded_sequence, structure = fold_sequence(name, sequence)
+            writer.writerow(
+                {
+                    "Accession": name,
+                    "seq_struc": seq_struct_value(folded_sequence, structure),
+                    "Classification": "TRUE" if label else "FALSE",
+                }
+            )
+            count += 1
+    if count == 0:
+        raise ValueError(f"No sequences found in {fasta_path}")
+    return csv_path
+
+
 def load_model_factory(source_dir, architecture):
     if architecture == "cnn":
         sys.path.insert(0, os.path.join(source_dir, "src", "CNN"))
@@ -65,8 +127,10 @@ def load_model_factory(source_dir, architecture):
 
 def main():
     parser = argparse.ArgumentParser(description="Train a dnnPreMiR model.")
-    parser.add_argument("--positive_csv", required=True)
-    parser.add_argument("--negative_csv", required=True)
+    parser.add_argument("--positive_fasta")
+    parser.add_argument("--negative_fasta")
+    parser.add_argument("--positive_csv")
+    parser.add_argument("--negative_csv")
     parser.add_argument("--output", required=True)
     parser.add_argument("--architecture", choices=["cnn", "rnn", "cnn_rnn"], default="cnn")
     parser.add_argument("--epochs", type=int, default=600)
@@ -80,12 +144,22 @@ def main():
     random.seed(args.seed)
     np.random.seed(args.seed)
 
+    if args.positive_csv and args.negative_csv:
+        positive_csv = args.positive_csv
+        negative_csv = args.negative_csv
+    elif args.positive_fasta and args.negative_fasta:
+        preprocess_dir = os.path.join(args.output, "preprocessed")
+        positive_csv = fasta_to_csv(args.positive_fasta, os.path.join(preprocess_dir, "positive.csv"), True)
+        negative_csv = fasta_to_csv(args.negative_fasta, os.path.join(preprocess_dir, "negative.csv"), False)
+    else:
+        raise ValueError("Provide either positive_csv/negative_csv or positive_fasta/negative_fasta")
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     source_dir = os.path.join(base_dir, "dnnpremir_src")
     model_factory = load_model_factory(source_dir, args.architecture)
 
-    examples = read_csv_examples(args.positive_csv, True)
-    examples.extend(read_csv_examples(args.negative_csv, False))
+    examples = read_csv_examples(positive_csv, True)
+    examples.extend(read_csv_examples(negative_csv, False))
     random.shuffle(examples)
 
     x_dataset = np.array([x for x, _ in examples])

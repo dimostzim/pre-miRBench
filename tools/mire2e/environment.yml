@@ -1,9 +1,11 @@
 name: mire2e
 channels:
   - conda-forge
+  - bioconda
 dependencies:
   - python=3.9
   - numpy<2
+  - viennarna
   - pip
   - pip:
       - biopython>=1.78

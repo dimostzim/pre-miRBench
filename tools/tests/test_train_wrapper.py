@@ -28,8 +28,6 @@ class TrainWrapperTest(unittest.TestCase):
     def test_builds_tool_args_and_generated_inference_configs(self):
         pos_fa = self.touch("positive.fa")
         neg_fa = self.touch("negative.fa")
-        pos_csv = self.touch("positive.csv")
-        neg_csv = self.touch("negative.csv")
         pos_bed = self.touch("positive.bed")
         neg_bed = self.touch("negative.bed")
         genome = self.touch("genome.fa")
@@ -42,7 +40,7 @@ class TrainWrapperTest(unittest.TestCase):
             "mirdnn": {"positive_fasta": pos_fa, "negative_fasta": neg_fa},
             "deepmir": {"positive_fasta": pos_fa, "negative_fasta": neg_fa},
             "deepmirgene": {"positive_fasta": pos_fa, "negative_fasta": neg_fa},
-            "dnnpremir": {"positive_csv": pos_csv, "negative_csv": neg_csv},
+            "dnnpremir": {"positive_fasta": pos_fa, "negative_fasta": neg_fa},
             "mustard": {
                 "positiveIntervals": pos_bed,
                 "negativeIntervals": neg_bed,
@@ -61,6 +59,23 @@ class TrainWrapperTest(unittest.TestCase):
                 self.assertIn("--output", args)
                 self.assertTrue(mounts)
                 self.assertTrue(inference_config)
+
+    def test_dnnpremir_accepts_precomputed_csv_inputs(self):
+        pos_csv = self.touch("positive.csv")
+        neg_csv = self.touch("negative.csv")
+        output_dir = os.path.join(self.repo_root, "results", "training", "dummy", "unit")
+
+        mounts = {}
+        args = self.train.build_tool_args(
+            "dnnpremir",
+            self.repo_root,
+            {"positive_csv": pos_csv, "negative_csv": neg_csv},
+            output_dir,
+            mounts,
+        )
+
+        self.assertIn("--positive_csv", args)
+        self.assertNotIn("--positive_fasta", args)
 
 
 if __name__ == "__main__":
