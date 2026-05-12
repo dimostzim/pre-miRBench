@@ -1,0 +1,10 @@
+positive_fasta: exampke_input/dnnpremir/positive.fa
+negative_fasta: exampke_input/dnnpremir/negative.fa
+positive_csv: null
+negative_csv: null
+architecture: cnn
+batch_size: 1
+epochs: 1
+validation_split: 0.2
+seed: 42
+inference_fasta: benchmark/data/tool_smoke_test.fa
