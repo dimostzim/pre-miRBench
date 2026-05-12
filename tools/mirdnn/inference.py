@@ -10,7 +10,7 @@ def main():
 
     p.add_argument("--input", required=True, help="Input FASTA file")
     p.add_argument("--output", default="results", help="Output directory")
-    p.add_argument("--model", default="animal", choices=["animal", "plants"], help="Pre-trained model to use")
+    p.add_argument("--model", default="animal", help="Pre-trained model name or explicit .pmt model path")
     p.add_argument("--seq_length", type=int, default=160, help="Sequence length for padding/truncation")
     p.add_argument("--device", default="cpu", help="Device to use (cpu, cuda:0, etc.)")
     p.add_argument("--batch_size", type=int, default=1024, help="Batch size for inference")
@@ -36,7 +36,12 @@ def main():
         subprocess.check_call(rnafold_cmd, cwd=os.path.abspath(args.output))
         fold_file = os.path.join(args.output, "input.fold")
 
-    model_path = os.path.join(mirdnn_src, "models", f"{args.model}.pmt")
+    if os.path.isfile(args.model):
+        model_path = os.path.abspath(args.model)
+    else:
+        model_path = os.path.join(mirdnn_src, "models", f"{args.model}.pmt")
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"mirDNN model not found: {model_path}")
     eval_script = os.path.join(mirdnn_src, "mirdnn_eval.py")
     output_file = os.path.join(os.path.abspath(args.output), "predictions.csv")
 

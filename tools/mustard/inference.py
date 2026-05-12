@@ -30,8 +30,13 @@ def main():
     perl_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mustard_src", "MuStARD.pl")
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # resolve model name to full path 
-    model_path = os.path.join(base_dir, "data", "models", args.model, "CNNonRaw.hdf5")
+    # Resolve bundled model names and explicit trained model paths.
+    if os.path.isfile(args.model):
+        model_path = os.path.abspath(args.model)
+    else:
+        model_path = os.path.join(base_dir, "data", "models", args.model, "CNNonRaw.hdf5")
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"MuStARD model not found: {model_path}")
     args.model = model_path
 
     if not os.path.isdir(args.dir):

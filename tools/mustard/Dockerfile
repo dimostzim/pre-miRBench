@@ -48,6 +48,7 @@ RUN for model in MuStARD-mirS MuStARD-mirF MuStARD-mirSF MuStARD-mirSC MuStARD-m
     done
 
 COPY inference.py ./
+COPY train.py ./
 
 WORKDIR /work
 

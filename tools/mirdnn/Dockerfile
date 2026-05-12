@@ -30,6 +30,7 @@ RUN pip install torch==2.0.1+cu118 --extra-index-url https://download.pytorch.or
 RUN git clone --recurse-submodules https://github.com/cyones/mirDNN.git mirdnn_src
 
 COPY inference.py ./
+COPY train.py ./
 
 WORKDIR /work
 

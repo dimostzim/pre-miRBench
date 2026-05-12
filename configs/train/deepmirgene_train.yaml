@@ -1,0 +1,13 @@
+# deepMiRGene retraining configuration.
+# Replace these with user-supplied FASTA files before running tools/train.py.
+positive_fasta: data/train/positive.fa
+negative_fasta: data/train/negative.fa
+validation_positive_fasta: null
+validation_negative_fasta: null
+
+batch_size: 256
+epochs: 100
+validation_split: 0.2
+seed: 1337
+
+inference_input: null

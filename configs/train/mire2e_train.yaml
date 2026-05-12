@@ -1,0 +1,18 @@
+# miRe2e retraining configuration.
+# Replace these with user-supplied FASTA files before running tools/train.py.
+positive_fasta: data/train/positive.fa
+negative_fasta: data/train/negative.fa
+validation_positive_fasta: null
+validation_negative_fasta: null
+
+device: cuda
+pretrained: hsa
+length: 100
+batch_size: 32
+epochs: 150
+seed: 42
+
+# Optional inference input for the generated inference_config.yaml.
+inference_input: null
+step: 20
+inference_batch_size: 4096

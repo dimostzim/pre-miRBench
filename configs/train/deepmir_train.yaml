@@ -1,0 +1,21 @@
+# DeepMir retraining configuration.
+# Replace these with user-supplied FASTA files before running tools/train.py.
+positive_fasta: data/train/positive.fa
+negative_fasta: data/train/negative.fa
+validation_positive_fasta: null
+validation_negative_fasta: null
+pretrain_positive_fasta: null
+pretrain_negative_fasta: null
+
+architecture: vgg
+training_mode: base
+modules: 3
+dense_units: 256
+filters: 28
+batch_size: 128
+epochs: 100
+pretrain_epochs: 40
+validation_split: 0.2
+seed: 42
+
+inference_input: null
