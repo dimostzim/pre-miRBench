@@ -64,6 +64,26 @@ def require_repo_path(repo_root, value, description, expect_dir=False):
     return path
 
 
+def looks_like_path(value):
+    return isinstance(value, str) and (
+        "/" in value or "\\" in value or value.endswith((".h5", ".hdf5", ".pmt", ".pkl"))
+    )
+
+
+def container_repo_path(repo_root, value, description, expect_dir=False):
+    path = require_repo_path(repo_root, value, description, expect_dir=expect_dir)
+    rel = os.path.relpath(path, repo_root)
+    if rel.startswith("..") or rel == os.pardir:
+        raise ValueError(f"{description} must be inside the repository for Docker inference: {path}")
+    return "/work/" + rel.replace(os.sep, "/")
+
+
+def model_arg(repo_root, value, description):
+    if value and looks_like_path(value):
+        return container_repo_path(repo_root, value, description)
+    return value
+
+
 def require_mustard_conservation_files(repo_root, cons_dir, chrom_list, input_mode):
     if "conservation" not in [item.strip() for item in input_mode.split(",") if item.strip()]:
         return
@@ -109,6 +129,11 @@ def main():
 
     if args.tool == "deepmirgene" and config.get("model"):
         require_repo_path(repo_root, config["model"], "deepMiRGene model")
+
+    if args.tool == "mire2e":
+        for key in ("structure_model", "mfe_model", "predictor_model"):
+            if config.get(key):
+                require_repo_path(repo_root, config[key], f"miRe2e {key}")
 
     output_dir = os.path.join(repo_root, "results", args.tool, args.output_name)
     os.makedirs(output_dir, exist_ok=True)
@@ -172,7 +197,7 @@ def main():
         cmd.extend(["--consDir", f"{path_prefix}{config['consDir']}"])
         cmd.extend(["--dir", output_path])
         cmd.extend(["--chromList", config["chromList"]])
-        cmd.extend(["--model", config["model"]])
+        cmd.extend(["--model", model_arg(repo_root, config["model"], "MuStARD model")])
         cmd.extend(["--classNum", str(config["classNum"])])
         cmd.extend(["--modelType", config["modelType"]])
         cmd.extend(["--winSize", str(config["winSize"])])
@@ -188,6 +213,12 @@ def main():
         cmd.extend(["--output", output_path])
         cmd.extend(["--device", config["device"]])
         cmd.extend(["--pretrained", config["pretrained"]])
+        if config.get("structure_model"):
+            cmd.extend(["--structure_model", container_repo_path(repo_root, config["structure_model"], "miRe2e structure_model")])
+        if config.get("mfe_model"):
+            cmd.extend(["--mfe_model", container_repo_path(repo_root, config["mfe_model"], "miRe2e mfe_model")])
+        if config.get("predictor_model"):
+            cmd.extend(["--predictor_model", container_repo_path(repo_root, config["predictor_model"], "miRe2e predictor_model")])
         cmd.extend(["--length", str(config["length"])])
         cmd.extend(["--step", str(config["step"])])
         cmd.extend(["--batch_size", str(config["batch_size"])])
@@ -195,7 +226,7 @@ def main():
     elif args.tool == "mirdnn":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
-        cmd.extend(["--model", config["model"]])
+        cmd.extend(["--model", model_arg(repo_root, config["model"], "mirDNN model")])
         cmd.extend(["--seq_length", str(config["seq_length"])])
         cmd.extend(["--device", config["device"]])
         cmd.extend(["--batch_size", str(config["batch_size"])])
@@ -203,19 +234,21 @@ def main():
     elif args.tool == "dnnpremir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
+        if config.get("model"):
+            cmd.extend(["--model", container_repo_path(repo_root, config["model"], "dnnPreMiR model")])
         if "seq_length" in config and config["seq_length"] is not None:
             cmd.extend(["--seq_length", str(config["seq_length"])])
 
     elif args.tool == "deepmir":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
-        cmd.extend(["--model", config["model"]])
+        cmd.extend(["--model", model_arg(repo_root, config["model"], "DeepMir model")])
 
     elif args.tool == "deepmirgene":
         cmd.extend(["--input", f"{path_prefix}{config['input']}"])
         cmd.extend(["--output", output_path])
         if config.get("model"):
-            cmd.extend(["--model", f"{path_prefix}{config['model']}"])
+            cmd.extend(["--model", container_repo_path(repo_root, config["model"], "deepMiRGene model")])
 
     subprocess.check_call(cmd)
 

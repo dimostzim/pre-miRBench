@@ -1,0 +1,15 @@
+# dnnPreMiR retraining configuration.
+# positive_csv and negative_csv must contain a seq_struc column using dnnPreMiR's
+# sequence/structure tokens, e.g. "A. U( G(".
+positive_csv: data/train/dnnpremir_positive.csv
+negative_csv: data/train/dnnpremir_negative.csv
+
+architecture: cnn
+batch_size: 200
+epochs: 600
+validation_split: 0.2
+seed: 42
+
+# dnnPreMiR inference consumes FASTA, so set this to the file you want the
+# generated inference config to score.
+inference_fasta: benchmark/data/tool_smoke_test.fa

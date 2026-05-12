@@ -12,7 +12,7 @@ from keras.models import load_model
 from pyfaidx import Fasta
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
-MODEL_FILENAME = CURRENT_DIR + "/models/fine_tuned_cnn.h5"
+MODEL_FILENAME = os.environ.get("DEEPMIR_MODEL_FILENAME", CURRENT_DIR + "/models/fine_tuned_cnn.h5")
 HAIRPIN_IMAGE_GENERATOR_JAR = "./hairpin_image_generator/ImageCalc.jar"
 
 

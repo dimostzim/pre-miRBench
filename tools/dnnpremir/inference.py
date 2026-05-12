@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 
@@ -10,6 +11,7 @@ def main():
 
     p.add_argument("--input", required=True, help="Input FASTA file")
     p.add_argument("--output", default="results", help="Output directory")
+    p.add_argument("--model", help="Optional custom CNN_model.h5 path")
     p.add_argument("--seq_length", type=int, default=180, help="Sequence length (fixed at 180, for documentation only)")
     args = p.parse_args()
 
@@ -29,7 +31,22 @@ def main():
         "-o", output_file
     ]
 
-    subprocess.check_call(cmd, cwd=dnnpremir_src)
+    target_model_path = os.path.join(dnnpremir_src, "src", "CNN", "CNN_model.h5")
+    restore_backup = None
+    if args.model:
+        provided_model = os.path.abspath(args.model)
+        if not os.path.isfile(provided_model):
+            raise FileNotFoundError(f"dnnPreMiR model not found: {provided_model}")
+        if os.path.exists(target_model_path):
+            restore_backup = target_model_path + ".bak"
+            shutil.copy2(target_model_path, restore_backup)
+        shutil.copy2(provided_model, target_model_path)
+
+    try:
+        subprocess.check_call(cmd, cwd=dnnpremir_src)
+    finally:
+        if restore_backup and os.path.exists(restore_backup):
+            shutil.move(restore_backup, target_model_path)
 
 
 if __name__ == "__main__":

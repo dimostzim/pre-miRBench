@@ -33,6 +33,7 @@ RUN git clone https://github.com/eleventh83/deepMiRGene.git deepmirgene_src
 RUN python /opt/deepmirgene/patch_upstream.py
 
 COPY inference.py ./
+COPY train.py ./
 
 RUN python -c "import tensorflow as tf; print('TensorFlow loaded successfully')"
 

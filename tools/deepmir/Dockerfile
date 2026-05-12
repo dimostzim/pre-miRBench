@@ -29,8 +29,10 @@ RUN git clone https://github.com/jacordero/deepmir.git deepmir_src
 RUN ln -sf /opt/deepmir/deepmir_src/hairpin_image_generator/bin/Linux/RNAfold \
         /opt/deepmir/deepmir_src/hairpin_image_generator/bin/RNAShapes.exe && \
     chmod +x /opt/deepmir/deepmir_src/hairpin_image_generator/bin/RNAShapes.exe
+COPY runtime_predictor.py /opt/deepmir/deepmir_src/predictor.py
 
 COPY inference.py ./
+COPY train.py ./
 
 WORKDIR /work
 

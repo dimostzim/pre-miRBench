@@ -37,6 +37,20 @@ Run from the repository root:
 python tools/inference.py --tool {tool} --output-name my_run
 ```
 
+## Retrain Models
+
+Retraining uses Docker and writes artifacts under `results/training/{tool}/{run-name}/`:
+
+```bash
+python tools/train.py --tool {tool} --run-name my_model --config configs/train/{tool}_train.yaml
+```
+
+The training configs are examples for user-supplied inputs. FASTA-native tools
+use positive/negative FASTA files; dnnPreMiR uses positive/negative CSV files
+with `seq_struc`; MuStARD uses its native interval/genome/conservation inputs.
+After a successful run, `inference_config.yaml` is written in the training
+result directory and can be passed to `tools/inference.py`.
+
 ## Configuration
 
 Edit `configs/{tool}_config.yaml` to set default parameters, or pass an explicit config file with `--config`.

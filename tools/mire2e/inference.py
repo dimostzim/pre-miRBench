@@ -14,6 +14,9 @@ def main():
     p.add_argument("--output", default="results")
     p.add_argument("--device", default="cpu")
     p.add_argument("--pretrained", default="hsa")
+    p.add_argument("--structure_model")
+    p.add_argument("--mfe_model")
+    p.add_argument("--predictor_model")
     p.add_argument("--length", type=int, default=100)
     p.add_argument("--step", type=int, default=20)
     p.add_argument("--batch_size", type=int, default=4096)
@@ -25,7 +28,14 @@ def main():
     if not os.path.isdir(args.output):
         os.makedirs(args.output)
 
-    model = MiRe2e(device=args.device, pretrained=args.pretrained)
+    model = MiRe2e(
+        device=args.device,
+        pretrained=args.pretrained,
+        structure_model_file=args.structure_model,
+        mfe_model_file=args.mfe_model,
+        predictor_model_file=args.predictor_model,
+        length=args.length,
+    )
 
     predictions = []
     processed = 0

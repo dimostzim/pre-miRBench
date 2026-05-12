@@ -32,6 +32,7 @@ RUN pip install miRe2e
 RUN python -c "from miRe2e import MiRe2e; MiRe2e(pretrained='hsa'); MiRe2e(pretrained='animals'); print('Models downloaded')"
 
 COPY inference.py ./
+COPY train.py ./
 
 WORKDIR /work
 
