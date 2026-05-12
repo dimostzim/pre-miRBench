@@ -1,0 +1,22 @@
+positive_fasta: exampke_input/mire2e/positive.fa
+negative_fasta: exampke_input/mire2e/negative.fa
+validation_positive_fasta: null
+validation_negative_fasta: null
+
+device: cpu
+pretrained: no
+train_structure: true
+train_mfe: true
+structure_training_fasta: null
+mfe_training_fasta: null
+length: 100
+batch_size: 1
+structure_batch_size: 1
+mfe_batch_size: 1
+epochs: 1
+structure_epochs: 1
+mfe_epochs: 1
+seed: 42
+inference_input: benchmark/data/tool_smoke_test.fa
+step: 20
+inference_batch_size: 1

@@ -1,0 +1,9 @@
+positive_fasta: exampke_input/deepmirgene/positive.fa
+negative_fasta: exampke_input/deepmirgene/negative.fa
+validation_positive_fasta: null
+validation_negative_fasta: null
+batch_size: 1
+epochs: 1
+validation_split: 0.2
+seed: 1337
+inference_input: benchmark/data/tool_smoke_test.fa

@@ -1,0 +1,4 @@
+chrTrain	10	80	pos_train_001	0	+
+chrTrain	100	170	pos_train_002	0	-
+chrTest	10	80	pos_test_001	0	+
+chrValid	10	80	pos_valid_001	0	+
