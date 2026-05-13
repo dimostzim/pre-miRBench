@@ -1,5 +1,5 @@
-positive_fasta: exampke_input/deepmir/positive.fa
-negative_fasta: exampke_input/deepmir/negative.fa
+positive_fasta: example_input/deepmir/positive.fa
+negative_fasta: example_input/deepmir/negative.fa
 validation_positive_fasta: null
 validation_negative_fasta: null
 pretrain_positive_fasta: null

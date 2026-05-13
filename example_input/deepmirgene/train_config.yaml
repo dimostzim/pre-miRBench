@@ -1,5 +1,5 @@
-positive_fasta: exampke_input/deepmirgene/positive.fa
-negative_fasta: exampke_input/deepmirgene/negative.fa
+positive_fasta: example_input/deepmirgene/positive.fa
+negative_fasta: example_input/deepmirgene/negative.fa
 validation_positive_fasta: null
 validation_negative_fasta: null
 batch_size: 1

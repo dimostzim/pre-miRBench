@@ -1,5 +1,5 @@
-positive_fasta: exampke_input/dnnpremir/positive.fa
-negative_fasta: exampke_input/dnnpremir/negative.fa
+positive_fasta: example_input/dnnpremir/positive.fa
+negative_fasta: example_input/dnnpremir/negative.fa
 positive_csv: null
 negative_csv: null
 architecture: cnn
