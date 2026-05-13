@@ -1,7 +1,7 @@
-positiveIntervals: exampke_input/mustard/positive.bed
-negativeIntervals: exampke_input/mustard/negative.bed
-genome: exampke_input/mustard/genome.fa
-consDir: exampke_input/mustard/consDir
+positiveIntervals: example_input/mustard/positive.bed
+negativeIntervals: example_input/mustard/negative.bed
+genome: example_input/mustard/genome.fa
+consDir: example_input/mustard/consDir
 classList: 1,2
 classNum: 2
 maxSize: 120
@@ -19,4 +19,4 @@ step: 5
 staticPredFlag: 1
 modelDirName: results
 intermDir: results/mustard_intermediate
-inference_input: exampke_input/mustard/positive.bed
+inference_input: example_input/mustard/positive.bed

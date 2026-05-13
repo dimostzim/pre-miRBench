@@ -1,6 +1,6 @@
-positive_fasta: exampke_input/mirdnn/positive.fa
-negative_fasta: exampke_input/mirdnn/negative.fa
-device: cpu
+positive_fasta: example_input/mirdnn/positive.fa
+negative_fasta: example_input/mirdnn/negative.fa
+device: cuda:0
 seq_length: 160
 batch_size: 1
 epochs: 1

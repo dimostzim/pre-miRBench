@@ -1,9 +1,9 @@
-positive_fasta: exampke_input/mire2e/positive.fa
-negative_fasta: exampke_input/mire2e/negative.fa
+positive_fasta: example_input/mire2e/positive.fa
+negative_fasta: example_input/mire2e/negative.fa
 validation_positive_fasta: null
 validation_negative_fasta: null
 
-device: cpu
+device: cuda
 pretrained: no
 train_structure: true
 train_mfe: true
