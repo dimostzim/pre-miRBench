@@ -160,6 +160,8 @@ def write_rows(output_path, rows, write_header):
         "structure",
         "mfe",
         "mirna_id",
+        "target_start",
+        "target_end",
         "label",
     ]
     mode = "a" if os.path.exists(output_path) else "w"
@@ -271,6 +273,8 @@ def main():
                         "structure": "",
                         "mfe": "",
                         "mirna_id": "",
+                        "target_start": "",
+                        "target_end": "",
                         "label": "0",
                     }
                 )

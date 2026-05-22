@@ -1,7 +1,7 @@
 # MuStARD retraining configuration.
 # MuStARD trains from intervals plus genome/conservation inputs, not FASTA.
-positiveIntervals: data/train/mustard_positive.bed
-negativeIntervals: data/train/mustard_negative.bed
+positiveIntervals: data/train/tool_inputs/mustard/positive.bed
+negativeIntervals: data/train/tool_inputs/mustard/negative.bed
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 
@@ -9,6 +9,7 @@ consDir: benchmark/data
 # positive class in downstream normalization.
 classList: 0,1
 classNum: 2
+device: cuda
 maxSize: 200
 extFlag: 0
 reinfNum: 5

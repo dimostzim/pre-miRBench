@@ -4,6 +4,14 @@ import os
 import random
 
 import numpy as np
+import tensorflow as tf
+
+
+def require_tensorflow_gpu(device):
+    if str(device).lower() == "cpu":
+        raise SystemExit("deepMiRGene training requires a CUDA GPU; got --device cpu")
+    if not tf.config.list_physical_devices("GPU"):
+        raise SystemExit("deepMiRGene training requires a visible TensorFlow GPU")
 
 
 def load_upstream_namespace(source_dir):
@@ -38,11 +46,12 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--validation_split", type=float, default=0.2)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=1337)
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_tensorflow_gpu(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
 

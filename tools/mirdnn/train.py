@@ -4,16 +4,21 @@ import os
 import subprocess
 import sys
 
+import torch as tr
+
+
+def require_torch_gpu(device):
+    if not str(device).startswith("cuda"):
+        raise SystemExit(f"mirDNN training requires a CUDA device; got --device {device}")
+    if not tr.cuda.is_available():
+        raise SystemExit("mirDNN training requires a visible PyTorch CUDA GPU")
+
 
 def fold_fasta(fasta_path, output_path):
     conda_bin = os.path.dirname(sys.executable)
-    cmd = [
-        os.path.join(conda_bin, "RNAfold"),
-        "--noPS",
-        f"--infile={os.path.abspath(fasta_path)}",
-        f"--outfile={os.path.abspath(output_path)}",
-    ]
-    subprocess.check_call(cmd)
+    cmd = [os.path.join(conda_bin, "RNAfold"), "--noPS"]
+    with open(fasta_path) as input_handle, open(output_path, "w") as output_handle:
+        subprocess.check_call(cmd, stdin=input_handle, stdout=output_handle)
 
 
 def main():
@@ -23,7 +28,7 @@ def main():
     parser.add_argument("--validation_positive_fasta")
     parser.add_argument("--validation_negative_fasta")
     parser.add_argument("--output", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch_size", type=int, default=1024)
     parser.add_argument("--seq_length", type=int, default=160)
     parser.add_argument("--epochs", type=int, default=150)
@@ -36,6 +41,7 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_torch_gpu(args.device)
     negative_fold = os.path.join(args.output, "negative.fold")
     positive_fold = os.path.join(args.output, "positive.fold")
     fold_fasta(args.negative_fasta, negative_fold)

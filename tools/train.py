@@ -250,6 +250,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
             path = require_dir(repo_root, config, key) if expect_dir else require_file(repo_root, config, key)
             cmd.extend([flag, container_path(repo_root, path, mounts)])
         for key, flag in (
+            ("device", "--device"),
             ("classList", "--classList"),
             ("maxSize", "--maxSize"),
             ("extFlag", "--extFlag"),

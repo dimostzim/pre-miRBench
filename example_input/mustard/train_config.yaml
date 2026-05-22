@@ -4,6 +4,7 @@ genome: example_input/mustard/genome.fa
 consDir: example_input/mustard/consDir
 classList: 1,2
 classNum: 2
+device: cuda
 maxSize: 120
 extFlag: 0
 reinfNum: 1

@@ -123,7 +123,7 @@ for chrom, start, end, strand, name in mirnas:
     if strand == '-':
         seq = reverse_complement(seq)
     window_id = f'{chrom}|{win_start + 1}-{win_end}|{strand}'
-    records.append((window_id, chrom, win_start, win_end, strand, seq, name))
+    records.append((window_id, chrom, win_start, win_end, strand, seq, name, start, end))
 
 print(f'{len(records)} positives kept  ({skipped_missing} chr missing, {skipped_boundary} boundary, {skipped_repeat} repeat-filtered)')
 
@@ -133,7 +133,7 @@ with tempfile.TemporaryDirectory() as tmp:
     fa_path = os.path.join(tmp, 'positives.fa')
     fold_path = os.path.join(tmp, 'positives.fold')
     with open(fa_path, 'w') as f:
-        for window_id, _chrom, _ws, _we, _strand, seq, _name in records:
+        for window_id, _chrom, _ws, _we, _strand, seq, _name, _start, _end in records:
             f.write(f'>{window_id}\n{seq}\n')
     cmd = ['RNAfold', '--noPS', f'--jobs={args.cpus}']
     with open(fa_path) as inf, open(fold_path, 'w') as outf:
@@ -143,12 +143,18 @@ with tempfile.TemporaryDirectory() as tmp:
 written = 0
 with open(args.output, 'w', newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(['window_id', 'chrom', 'start', 'end', 'strand', 'sequence', 'structure', 'mfe', 'mirna_id', 'label'])
-    for window_id, chrom, win_start, win_end, strand, seq, name in records:
+    writer.writerow([
+        'window_id', 'chrom', 'start', 'end', 'strand', 'sequence',
+        'structure', 'mfe', 'mirna_id', 'target_start', 'target_end', 'label',
+    ])
+    for window_id, chrom, win_start, win_end, strand, seq, name, target_start, target_end in records:
         if window_id not in fold_results:
             continue
         structure, mfe = fold_results[window_id]
-        writer.writerow([window_id, chrom, win_start, win_end, strand, seq, structure, mfe, name, 1])
+        writer.writerow([
+            window_id, chrom, win_start, win_end, strand, seq, structure,
+            mfe, name, target_start, target_end, 1,
+        ])
         written += 1
 
 print(f'{written} positives -> {args.output}')

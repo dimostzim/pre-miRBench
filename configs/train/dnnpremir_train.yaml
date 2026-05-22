@@ -1,14 +1,18 @@
 # dnnPreMiR retraining configuration.
 # The wrapper folds FASTA inputs with RNAfold and generates the seq_struc CSVs
-# expected by upstream dnnPreMiR.
-positive_fasta: data/train/positive.fa
-negative_fasta: data/train/negative.fa
+# expected by upstream dnnPreMiR. Inputs are center-cropped to 180 nt by
+# benchmark/train_data/build_dataset.py.
+positive_fasta: data/train/tool_inputs/dnnpremir/positive.fa
+negative_fasta: data/train/tool_inputs/dnnpremir/negative.fa
+validation_positive_fasta: data/train/tool_inputs/dnnpremir/validation_positive.fa
+validation_negative_fasta: data/train/tool_inputs/dnnpremir/validation_negative.fa
 
 # Optional: use precomputed CSVs instead of FASTA. Each CSV must contain a
 # seq_struc column using dnnPreMiR tokens, e.g. "A. U( G(".
 positive_csv: null
 negative_csv: null
 
+device: cuda
 architecture: cnn
 batch_size: 200
 epochs: 600

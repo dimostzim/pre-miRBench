@@ -6,6 +6,15 @@ import shutil
 import subprocess
 
 
+def require_tensorflow_gpu(device):
+    if str(device).lower() == "cpu":
+        raise SystemExit("MuStARD training requires a CUDA GPU; got --device cpu")
+    import tensorflow as tf
+
+    if not tf.config.list_physical_devices("GPU"):
+        raise SystemExit("MuStARD training requires a visible TensorFlow GPU")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train a MuStARD model.")
     parser.add_argument("--positiveIntervals", required=True)
@@ -23,9 +32,11 @@ def main():
     parser.add_argument("--threads", type=int, default=10)
     parser.add_argument("--exclTest", default="chr1,chr3")
     parser.add_argument("--exclValid", default="chr2,chr4")
+    parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_tensorflow_gpu(args.device)
     base_dir = os.path.dirname(os.path.abspath(__file__))
     train_script = os.path.join(base_dir, "mustard_src", "src", "MuStARD_train.pl")
 
