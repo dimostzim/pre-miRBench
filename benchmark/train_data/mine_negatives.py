@@ -35,6 +35,8 @@ def write_rows(path, rows, extra_fields=None):
         "structure",
         "mfe",
         "mirna_id",
+        "target_start",
+        "target_end",
         "label",
     ]
     fields = list(base_fields)

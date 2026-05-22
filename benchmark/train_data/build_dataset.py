@@ -14,8 +14,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from prepare_tool_inputs import DEFAULT_TARGET_LENGTHS, prepare_tool_inputs
+
 
 FIELDNAMES = [
+    "record_id",
+    "split",
     "window_id",
     "chrom",
     "start",
@@ -25,7 +29,12 @@ FIELDNAMES = [
     "structure",
     "mfe",
     "mirna_id",
+    "target_start",
+    "target_end",
     "label",
+    "score",
+    "consensus",
+    "hard_round",
 ]
 
 
@@ -42,17 +51,12 @@ def read_rows(path):
         return list(csv.DictReader(handle))
 
 
-def write_dataset(path, positives, negatives):
+def write_dataset(path, rows):
     with open(path, "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDNAMES)
         writer.writeheader()
-        for row in positives:
+        for row in rows:
             output = {field: row.get(field, "") for field in FIELDNAMES}
-            output["label"] = "1"
-            writer.writerow(output)
-        for row in negatives:
-            output = {field: row.get(field, "") for field in FIELDNAMES}
-            output["label"] = "0"
             writer.writerow(output)
 
 
@@ -89,6 +93,49 @@ def write_bed(path, rows, label):
                 )
                 + "\n"
             )
+
+
+def split_counts(total, valid_frac, test_frac):
+    test_count = int(round(total * test_frac))
+    valid_count = int(round(total * valid_frac))
+    if test_frac > 0 and total >= 3 and test_count == 0:
+        test_count = 1
+    if valid_frac > 0 and total >= 3 and valid_count == 0:
+        valid_count = 1
+    while valid_count + test_count >= total and (valid_count or test_count):
+        if test_count >= valid_count and test_count:
+            test_count -= 1
+        elif valid_count:
+            valid_count -= 1
+    return valid_count, test_count
+
+
+def assign_records(rows, prefix, label, valid_frac, test_frac, seed):
+    rng = random.Random(seed)
+    rows = [row.copy() for row in rows]
+    rng.shuffle(rows)
+    valid_count, test_count = split_counts(len(rows), valid_frac, test_frac)
+    test_start = len(rows) - test_count
+    valid_start = test_start - valid_count
+
+    assigned = []
+    for index, row in enumerate(rows, start=1):
+        if index > test_start:
+            split = "test"
+        elif index > valid_start:
+            split = "valid"
+        else:
+            split = "train"
+        row["record_id"] = f"{prefix}_{index:06d}"
+        row["split"] = split
+        row["label"] = str(label)
+        assigned.append(row)
+    assigned.sort(key=lambda item: item["record_id"])
+    return assigned
+
+
+def rows_for(rows, split, label):
+    return [row for row in rows if row.get("split") == split and str(row.get("label")) == str(label)]
 
 
 def select_negatives(positives, hard_negatives, scored_negatives, ratio, seed):
@@ -136,6 +183,8 @@ def parse_args():
     parser.add_argument("--ratio", type=float, default=5.0, help="Negatives per positive. Default 5.0 = 1:5.")
     parser.add_argument("--window", type=int, default=200)
     parser.add_argument("--step", type=int, default=50)
+    parser.add_argument("--valid-frac", type=float, default=0.1)
+    parser.add_argument("--test-frac", type=float, default=0.1)
     parser.add_argument("--chr", dest="chromosomes", default=None)
     parser.add_argument("--max-repeat-frac", type=float, default=0.1)
     parser.add_argument("--min-mfe", type=float, default=-10.0)
@@ -149,6 +198,9 @@ def parse_args():
     parser.add_argument("--trees", type=int, default=200)
     parser.add_argument("--consensus", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--dnnpremir-length", type=int, default=180)
+    parser.add_argument("--mirdnn-length", type=int, default=160)
+    parser.add_argument("--mire2e-length", type=int, default=100)
     parser.add_argument("--reuse-existing", action="store_true", help="Skip stages whose output files already exist.")
     return parser.parse_args()
 
@@ -157,6 +209,8 @@ def main():
     args = parse_args()
     if args.ratio <= 0:
         raise SystemExit("--ratio must be positive")
+    if args.valid_frac < 0 or args.test_frac < 0 or args.valid_frac + args.test_frac >= 1:
+        raise SystemExit("--valid-frac and --test-frac must be non-negative and sum to less than 1")
 
     script_dir = Path(__file__).resolve().parent
     work_dir = Path(args.work_dir)
@@ -257,21 +311,41 @@ def main():
     hard_negatives = read_rows(hard_csv)
     scored_negatives = read_rows(scores_csv)
     negatives = select_negatives(positives, hard_negatives, scored_negatives, args.ratio, args.seed)
+    positives = assign_records(positives, "pos", 1, args.valid_frac, args.test_frac, args.seed)
+    negatives = assign_records(negatives, "neg", 0, args.valid_frac, args.test_frac, args.seed + 1)
+    dataset_rows = positives + negatives
 
     dataset_csv = output_dir / "dataset.csv"
-    write_dataset(dataset_csv, positives, negatives)
-    write_fasta(output_dir / "positive.fa", positives)
-    write_fasta(output_dir / "negative.fa", negatives)
-    write_bed(output_dir / "mustard_positive.bed", positives, 1)
-    write_bed(output_dir / "mustard_negative.bed", negatives, 0)
+    write_dataset(dataset_csv, dataset_rows)
+
+    for split, prefix in (("train", ""), ("valid", "validation_"), ("test", "test_")):
+        write_fasta(output_dir / f"{prefix}positive.fa", rows_for(dataset_rows, split, 1))
+        write_fasta(output_dir / f"{prefix}negative.fa", rows_for(dataset_rows, split, 0))
+        write_bed(output_dir / f"{prefix}mustard_positive.bed", rows_for(dataset_rows, split, 1), 1)
+        write_bed(output_dir / f"{prefix}mustard_negative.bed", rows_for(dataset_rows, split, 0), 0)
+
+    target_lengths = DEFAULT_TARGET_LENGTHS.copy()
+    target_lengths.update(
+        {
+            "dnnpremir": args.dnnpremir_length,
+            "mirdnn": args.mirdnn_length,
+            "mire2e": args.mire2e_length,
+        }
+    )
+    tool_output_dir = output_dir / "tool_inputs"
+    prepare_tool_inputs(dataset_rows, tool_output_dir, target_lengths=target_lengths)
 
     print("\nsummary")
     print(f"positives: {len(positives)}")
     print(f"negatives: {len(negatives)}")
     print(f"ratio: 1:{len(negatives) / len(positives):.2f}")
+    print(f"split: train={len(rows_for(dataset_rows, 'train', 1))}+{len(rows_for(dataset_rows, 'train', 0))} "
+          f"valid={len(rows_for(dataset_rows, 'valid', 1))}+{len(rows_for(dataset_rows, 'valid', 0))} "
+          f"test={len(rows_for(dataset_rows, 'test', 1))}+{len(rows_for(dataset_rows, 'test', 0))}")
     print(f"dataset: {dataset_csv}")
     print(f"fasta: {output_dir / 'positive.fa'} | {output_dir / 'negative.fa'}")
     print(f"bed: {output_dir / 'mustard_positive.bed'} | {output_dir / 'mustard_negative.bed'}")
+    print(f"tool inputs: {tool_output_dir}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ validation_positive_fasta: null
 validation_negative_fasta: null
 pretrain_positive_fasta: null
 pretrain_negative_fasta: null
+device: cuda
 architecture: vgg
 training_mode: base
 modules: 1

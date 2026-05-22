@@ -12,6 +12,13 @@ from miRe2e.mfe import MFE
 from miRe2e.structure import Structure
 
 
+def require_torch_gpu(device):
+    if not str(device).startswith("cuda"):
+        raise SystemExit(f"miRe2e training requires a CUDA device; got --device {device}")
+    if not tr.cuda.is_available():
+        raise SystemExit("miRe2e training requires a visible PyTorch CUDA GPU")
+
+
 def parse_bool(value):
     if isinstance(value, bool):
         return value
@@ -82,7 +89,7 @@ def main():
     parser.add_argument("--validation_positive_fasta")
     parser.add_argument("--validation_negative_fasta")
     parser.add_argument("--output", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--pretrained", default="hsa")
     parser.add_argument("--train_structure", type=parse_bool, default=True)
     parser.add_argument("--train_mfe", type=parse_bool, default=True)
@@ -103,6 +110,7 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_torch_gpu(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
     tr.manual_seed(args.seed)

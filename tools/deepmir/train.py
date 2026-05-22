@@ -9,7 +9,19 @@ import sys
 import imageio
 import keras
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.utils import to_categorical
 from keras import backend as K
+
+if not hasattr(keras.optimizers, "Adam") and hasattr(keras.optimizers, "adam_v2"):
+    keras.optimizers.Adam = keras.optimizers.adam_v2.Adam
+
+
+def require_tensorflow_gpu(device):
+    if str(device).lower() == "cpu":
+        raise SystemExit("DeepMir training requires a CUDA GPU; got --device cpu")
+    if not tf.config.list_physical_devices("GPU"):
+        raise SystemExit("DeepMir training requires a visible TensorFlow GPU")
 
 
 def read_fasta(path):
@@ -81,7 +93,7 @@ def build_dataset(source_dir, positive_fasta, negative_fasta, output_dir):
         x = np.swapaxes(x, 1, 3)
     if np.amax(x) > 1:
         x /= 255
-    y = keras.utils.to_categorical(np.array(labels), 2)
+    y = to_categorical(np.array(labels), 2)
     return x, y, np.array(names, dtype=np.string_)
 
 
@@ -140,11 +152,12 @@ def main():
     parser.add_argument("--pretrain_epochs", type=int, default=40)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--validation_split", type=float, default=0.2)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_tensorflow_gpu(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
 

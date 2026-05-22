@@ -9,6 +9,22 @@ import sys
 import numpy as np
 
 
+def require_tensorflow_gpu(device):
+    if str(device).lower() == "cpu":
+        raise SystemExit("dnnPreMiR training requires a CUDA GPU; got --device cpu")
+    import tensorflow as tf
+
+    if not tf.config.list_physical_devices("GPU"):
+        raise SystemExit("dnnPreMiR training requires a visible TensorFlow GPU")
+
+
+def patch_keras_optimizers():
+    import keras
+
+    if not hasattr(keras.optimizers, "Adam") and hasattr(keras.optimizers, "adam_v2"):
+        keras.optimizers.Adam = keras.optimizers.adam_v2.Adam
+
+
 X_CAST = {
     "A.": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     "U.": [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -107,6 +123,8 @@ def fasta_to_csv(fasta_path, csv_path, label):
 
 
 def load_model_factory(source_dir, architecture):
+    patch_keras_optimizers()
+
     if architecture == "cnn":
         sys.path.insert(0, os.path.join(source_dir, "src", "CNN"))
         from CNNModel import CNN_model
@@ -136,11 +154,12 @@ def main():
     parser.add_argument("--epochs", type=int, default=600)
     parser.add_argument("--batch_size", type=int, default=200)
     parser.add_argument("--validation_split", type=float, default=0.2)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
+    require_tensorflow_gpu(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
 
