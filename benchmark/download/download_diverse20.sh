@@ -6,11 +6,7 @@ OUT_ROOT="${1:-data/train/raw/diverse20}"
 VALIDATOR="${ROOT_DIR}/benchmark/train_data/validate_bed_genome.py"
 
 AUTO_CODES=(
-  hsa mmu mdo oan gga aca xtr dre cmi bfl cin dme aga cel spu
-)
-
-MANUAL_GENOME_CODES=(
-  loc tca nve aqu sro
+  hsa mmu mdo oan bta gga ami aca cpi xtr dre cmi gmo tni bfl cin dme aga cel spu
 )
 
 species_name() {
@@ -19,35 +15,24 @@ species_name() {
         mmu) echo "Mouse (Mus musculus)" ;;
         mdo) echo "Opossum (Monodelphis domestica)" ;;
         oan) echo "Platypus (Ornithorhynchus anatinus)" ;;
+        bta) echo "Cow (Bos taurus)" ;;
         gga) echo "Chicken (Gallus gallus)" ;;
+        ami) echo "Alligator (Alligator mississippiensis)" ;;
         aca) echo "Anole lizard (Anolis carolinensis)" ;;
+        cpi) echo "Painted turtle (Chrysemys picta bellii)" ;;
         xtr) echo "Xenopus tropicalis" ;;
         dre) echo "Zebrafish (Danio rerio)" ;;
-        loc) echo "Spotted gar (Lepisosteus oculatus)" ;;
         cmi) echo "Elephant shark (Callorhinchus milii)" ;;
+        gmo) echo "Atlantic cod (Gadus morhua)" ;;
+        tni) echo "Tetraodon (Tetraodon nigroviridis)" ;;
         bfl) echo "Amphioxus (Branchiostoma floridae)" ;;
         cin) echo "Ciona intestinalis" ;;
         dme) echo "Drosophila melanogaster" ;;
-        tca) echo "Red flour beetle (Tribolium castaneum)" ;;
         aga) echo "Anopheles gambiae" ;;
         cel) echo "C. elegans (Caenorhabditis elegans)" ;;
         spu) echo "Sea urchin (Strongylocentrotus purpuratus)" ;;
-        nve) echo "Sea anemone (Nematostella vectensis)" ;;
-        aqu) echo "Sponge (Amphimedon queenslandica)" ;;
-        sro) echo "Flatworm (Symsagittifera roscoffensis)" ;;
         *) echo "$1" ;;
     esac
-}
-
-download_bed_only() {
-    local code="$1"
-    local out_dir="$2"
-    mkdir -p "$out_dir"
-    local all_bed="${out_dir}/${code}-all.bed"
-    local pre_bed="${out_dir}/${code}-precursors-no-v2.bed"
-    curl -L -o "$all_bed" "https://mirgenedb.org/static/data/${code}/${code}-all.bed"
-    awk '$4 ~ /_pre$/' "$all_bed" | grep -v -- "-v2_" > "$pre_bed"
-    rm "$all_bed"
 }
 
 mkdir -p "$OUT_ROOT"
@@ -67,15 +52,6 @@ for code in "${AUTO_CODES[@]}"; do
     printf "%s\t%s\tauto\t%s\t%s\t%s\n" "$code" "$(species_name "$code")" "$genome" "$bed" "$validation" >> "$PANEL_TSV"
 done
 
-echo "Downloading MirGeneDB BEDs for manual-genome species..."
-for code in "${MANUAL_GENOME_CODES[@]}"; do
-    out_dir="${OUT_ROOT}/${code}"
-    echo "### ${code} $(species_name "$code")"
-    download_bed_only "$code" "$out_dir"
-    bed="${out_dir}/${code}-precursors-no-v2.bed"
-    printf "%s\t%s\tmanual_genome_required\t\t%s\t\n" "$code" "$(species_name "$code")" "$bed" >> "$PANEL_TSV"
-done
-
 echo ""
 echo "panel manifest: $PANEL_TSV"
-echo "manual genome required for: ${MANUAL_GENOME_CODES[*]}"
+echo "all panel species include automatic UCSC genome download and BED-vs-genome validation"

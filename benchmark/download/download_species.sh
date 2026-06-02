@@ -12,10 +12,15 @@ Supported species:
   rno  rat          rn7
   mdo  opossum      monDom5
   oan  platypus     ornAna2
+  bta  cow          bosTau9
   gga  chicken      galGal6
+  ami  alligator    allMis1
   aca  anole        anoCar2
+  cpi  painted turtle chrPic1
   xtr  X. tropicalis xenTro10
   cmi  elephant shark calMil1
+  gmo  Atlantic cod gadMor1
+  tni  Tetraodon    tetNig2
   bfl  amphioxus    braFlo1
   cin  Ciona        ci3
   dme  fruit fly    dm6
@@ -53,10 +58,15 @@ case "$SPECIES" in
     rno) BUILD="rn7"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/rn7.fa.gz" ;;
     mdo) BUILD="monDom5"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/monDom5/bigZips/monDom5.fa.gz" ;;
     oan) BUILD="ornAna2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/ornAna2/bigZips/ornAna2.fa.gz" ;;
+    bta) BUILD="bosTau9"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/bosTau9/bigZips/bosTau9.fa.gz" ;;
     gga) BUILD="galGal6"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/galGal6/bigZips/galGal6.fa.gz" ;;
+    ami) BUILD="allMis1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/allMis1/bigZips/allMis1.fa.gz" ;;
     aca) BUILD="anoCar2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/anoCar2/bigZips/anoCar2.fa.gz" ;;
+    cpi) BUILD="chrPic1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/chrPic1/bigZips/chrPic1.fa.gz" ;;
     xtr) BUILD="xenTro10"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/xenTro10/bigZips/xenTro10.fa.gz" ;;
     cmi) BUILD="calMil1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/calMil1/bigZips/calMil1.fa.gz" ;;
+    gmo) BUILD="gadMor1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/gadMor1/bigZips/gadMor1.fa.gz" ;;
+    tni) BUILD="tetNig2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/tetNig2/bigZips/tetNig2.fa.gz" ;;
     bfl) BUILD="braFlo1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/braFlo1/bigZips/braFlo1.fa.gz" ;;
     cin) BUILD="ci3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/ci3/bigZips/ci3.fa.gz" ;;
     dme) BUILD="dm6"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/dm6/bigZips/dm6.fa.gz" ;;
