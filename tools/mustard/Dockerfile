@@ -24,6 +24,7 @@ RUN mamba env create \
     conda clean -afy
 
 ENV PATH="/opt/conda/envs/mustard/bin:${PATH}"
+ENV MPLBACKEND=Agg
 
 RUN git clone https://gitlab.com/RBP_Bioinformatics/mustard.git mustard_src
 
@@ -38,8 +39,17 @@ RUN sed -i 's/tf\.Session(/tf.compat.v1.Session(/g' \
 RUN sed -i 's/tf\.ConfigProto(/tf.compat.v1.ConfigProto(/g' \
     mustard_src/src/utilities/python/apply_CNN.py
 
+# Patch training helpers for the TensorFlow/Keras 2.x environment in this image.
+RUN sed -i 's/from keras\.optimizers import SGD, RMSprop, Adam/from tensorflow.keras.optimizers import SGD, RMSprop, Adam/g; s/tf\.set_random_seed(/tf.random.set_seed(/g; s/tf\.Session(/tf.compat.v1.Session(/g; s/tf\.ConfigProto(/tf.compat.v1.ConfigProto(/g; s/history\.history\['\''acc'\''\]/history.history.get('\''acc'\'') or history.history.get('\''accuracy'\'')/g; s/history\.history\['\''val_acc'\''\]/history.history.get('\''val_acc'\'') or history.history.get('\''val_accuracy'\'')/g' \
+    mustard_src/src/utilities/python/train_CNN.py \
+    mustard_src/src/utilities/python/train_CAE.py
+
 RUN sed -i "s/gzip.open(input_file,'r')/gzip.open(input_file,'rt')/g" \
     mustard_src/src/lib/python/Files/Format.py
+
+# bedtools >=2.31 appends ::chrom:start-stop to -name output; MuStARD's
+# label map is keyed by the original BED name.
+RUN python -c 'from pathlib import Path; p = Path("mustard_src/src/lib/perl/Files/CleanUp.pm"); s = p.read_text(); old = "\t\t\t\t$temp[0] =~ s/\\((\\+|-)\\)//g;\n\t\t\t\tmy $strand = $1;\n"; new = old + "\n\t\t\t\t$temp[0] =~ s/::.*$//;\n"; p.write_text(s.replace(old, new, 2))'
 
 RUN mkdir -p data/models
 RUN for model in MuStARD-mirS MuStARD-mirF MuStARD-mirSF MuStARD-mirSC MuStARD-mirFC MuStARD-mirSFC MuStARD-mirSFC-U; do \
