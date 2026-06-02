@@ -50,21 +50,16 @@ Default output root: `data/train/raw/diverse20`.
 The panel is intended to avoid overloading the benchmark with closely related
 species. It includes broad vertebrate and invertebrate coverage.
 
-The script automatically downloads genome FASTA, MirGeneDB BED, and runs
-BED-vs-genome validation for:
+The script downloads genome FASTA, MirGeneDB BED, and runs BED-vs-genome
+validation for all 20 panel species:
 
 ```text
-hsa, mmu, mdo, oan, gga, aca, xtr, dre, cmi, bfl, cin, dme, aga, cel, spu
+hsa, mmu, mdo, oan, bta, gga, ami, aca, cpi, xtr,
+dre, cmi, gmo, tni, bfl, cin, dme, aga, cel, spu
 ```
 
-It downloads MirGeneDB BEDs but marks manual genome sourcing as required for:
-
-```text
-loc, tca, nve, aqu, sro
-```
-
-because those species do not have exact UCSC genome matches in the UCSC genome
-API used by this script.
+These species have MirGeneDB BEDs and straightforward UCSC genome FASTA
+downloads. The panel deliberately avoids stacking closely related primates.
 
 The panel writes:
 
