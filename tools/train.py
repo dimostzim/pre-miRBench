@@ -258,9 +258,15 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
         for key, flag, expect_dir in (
             ("positiveIntervals", "--positiveIntervals", False),
             ("negativeIntervals", "--negativeIntervals", False),
+            ("testPositiveIntervals", "--testPositiveIntervals", False),
+            ("testNegativeIntervals", "--testNegativeIntervals", False),
+            ("validationPositiveIntervals", "--validationPositiveIntervals", False),
+            ("validationNegativeIntervals", "--validationNegativeIntervals", False),
             ("genome", "--genome", False),
             ("consDir", "--consDir", True),
         ):
+            if key not in config or config.get(key) is None:
+                continue
             path = require_dir(repo_root, config, key) if expect_dir else require_file(repo_root, config, key)
             cmd.extend([flag, container_path(repo_root, path, mounts)])
         for key, flag in (

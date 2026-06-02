@@ -24,12 +24,14 @@ RUN mamba env create \
     conda clean -afy
 
 ENV PATH="/opt/conda/envs/mire2e/bin:${PATH}"
+ENV TORCH_HOME=/opt/mire2e/torch_cache
 
 RUN pip install torch==2.0.1+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
 
 RUN pip install miRe2e
 
-RUN python -c "from miRe2e import MiRe2e; MiRe2e(pretrained='hsa'); MiRe2e(pretrained='animals'); print('Models downloaded')"
+RUN python -c "from miRe2e import MiRe2e; MiRe2e(pretrained='hsa'); MiRe2e(pretrained='animals'); print('Models downloaded')" && \
+    chmod -R a+rX "$TORCH_HOME"
 
 COPY inference.py ./
 COPY train.py ./
