@@ -1,5 +1,44 @@
 # Download Data Scripts
 
+## Common Species Data
+
+```bash
+./download_species.sh <species_code> [output_dir] [chromosome|all]
+```
+
+Supported species:
+
+| Code | Species | UCSC build | MirGeneDB check |
+|------|---------|------------|-----------------|
+| `hsa` | human | `hg38` | available |
+| `mmu` | mouse | `mm39` | available |
+| `rno` | rat | `rn7` | available |
+| `dme` | fruit fly | `dm6` | available |
+| `dre` | zebrafish | `danRer11` | available |
+| `cel` | C. elegans | `ce11` | available |
+
+Examples:
+
+```bash
+./download_species.sh mmu data/train/raw/mmu all
+./download_species.sh hsa data/train/raw/hsa_chr14 chr14
+```
+
+The script downloads:
+
+- `<ucsc_build>.fa` - genome FASTA
+- `<species_code>-precursors-no-v2.bed` - filtered MirGeneDB `_pre` entries
+
+To check MirGeneDB BED availability/counts for species codes:
+
+```bash
+./check_mirgenedb_species.sh hsa,mmu,rno,dme,dre,cel
+```
+
+The generic species script does not download conservation tracks. MuStARD can
+still train without conservation by using `inputMode: sequence,RNAfold` or
+`inputMode: sequence`, unless species-specific conservation files are supplied.
+
 ## C. elegans Data
 
 ```bash
