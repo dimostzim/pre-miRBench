@@ -78,6 +78,29 @@ python benchmark/train_data/validate_bed_genome.py \
   --genome data/train/raw/diverse20/hsa/hg38.fa
 ```
 
+After download, build the prefixed multispecies training dataset:
+
+```bash
+python benchmark/train_data/build_multispecies_dataset.py \
+  --panel data/train/raw/diverse20/panel.tsv \
+  --output-dir data/train_diverse20 \
+  --work-dir benchmark/train_data/work_diverse20 \
+  --ratio 5 \
+  --window 200 \
+  --step 50 \
+  --heldout-species dre,dme \
+  --max-negative-windows-per-species 50000 \
+  --cpus 8
+```
+
+The multispecies builder prefixes every contig as `<species>__<contig>` and
+creates these canonical splits:
+
+- `train`
+- `valid` - one validation chromosome/scaffold per non-heldout species, when available
+- `test_chrom` - one test chromosome/scaffold per non-heldout species, when available
+- `test_species` - all rows from the held-out species
+
 ## C. elegans Data
 
 ```bash

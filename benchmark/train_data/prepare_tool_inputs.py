@@ -25,6 +25,7 @@ DEFAULT_TARGET_LENGTHS = {
 
 METADATA_FIELDS = [
     "record_id",
+    "species",
     "split",
     "label",
     "window_id",
@@ -91,19 +92,24 @@ def crop_bounds(row, sequence_length, target_length):
 def prepare_row(row, tool, target_length):
     sequence = normalize_sequence(row["sequence"])
     left, right = crop_bounds(row, len(sequence), target_length)
-    prepared_sequence = sequence[left:right]
     source_start = int(row["start"])
+    source_end = int(row["end"])
     prepared_start = source_start + left
-    prepared_end = prepared_start + len(prepared_sequence)
+    prepared_end = source_start + right
+    if row.get("strand") == "-":
+        prepared_sequence = sequence[len(sequence) - right:len(sequence) - left]
+    else:
+        prepared_sequence = sequence[left:right]
 
     prepared = {
         "record_id": row["record_id"],
+        "species": row.get("species", ""),
         "split": split_name(row.get("split")),
         "label": label_name(row["label"]),
         "window_id": row["window_id"],
         "chrom": row["chrom"],
         "source_start": source_start,
-        "source_end": int(row["end"]),
+        "source_end": source_end,
         "prepared_start": prepared_start,
         "prepared_end": prepared_end,
         "strand": row.get("strand") or "+",
@@ -157,12 +163,18 @@ def write_metadata(path, rows):
 
 
 def write_split_files(output_dir, rows):
-    for split in ("train", "valid", "test"):
+    split_prefixes = {
+        "train": "",
+        "valid": "validation_",
+        "test": "test_",
+        "test_chrom": "test_chrom_",
+        "test_species": "test_species_",
+    }
+    for split, prefix in split_prefixes.items():
         split_rows = [row for row in rows if row["split"] == split]
         for label in ("positive", "negative"):
             label_rows = [row for row in split_rows if row["label"] == label]
             stem = "positive" if label == "positive" else "negative"
-            prefix = "" if split == "train" else ("validation_" if split == "valid" else "test_")
             write_fasta(output_dir / f"{prefix}{stem}.fa", label_rows)
             write_bed(output_dir / f"{prefix}{stem}.bed", label_rows)
 
