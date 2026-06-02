@@ -1,302 +1,92 @@
-# Benchmark Pipeline
+# Training Data Pipeline
 
-Pre-miRNA prediction benchmark: RNA folding, dataset creation, tool-specific input preparation, and evaluation.
+This directory contains the data download and dataset-building code used for
+tool retraining.
 
 ## Requirements
 
-- ViennaRNA
-- bedtools
-- Python packages: `numpy`, `matplotlib`, `scikit-learn`, `scipy`
-
-## Setup
-
-Run the following commands from the repository root unless noted otherwise.
-
-```bash
-conda env create -f benchmark/environment.yml
-conda activate benchmark
-```
-
-Build the tool Docker images once before running the tool benchmark:
-
-```bash
-cd tools
-./setup.sh --tool deepmir
-./setup.sh --tool deepmirgene
-./setup.sh --tool dnnpremir
-./setup.sh --tool mirdnn
-./setup.sh --tool mire2e
-./setup.sh --tool mustard
-cd ..
-```
-
-## Balanced Benchmark
-
-The current end-to-end tool benchmark is the collapsed balanced dataset:
-
-- positives: one representative 200 nt window per pre-miRNA
-- negatives: matched 1:1 negatives
-- implementation: `benchmark/balanced_benchmark/`
-- source dataset: `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv`
-
-The saved dataset currently has `55` positives and `55` negatives (`110` rows
-total). The chr14 truth BED contains `60` precursor loci, but `5` loci never
-enter the balanced benchmark because no 200 nt source window fully containing
-them passes the folding pipeline repeat-mask filter (`--max_repeat_frac 0.1`).
-That exclusion happens before collapsing or negative sampling.
-
-### Full Pipeline
-
-If `benchmark/balanced_benchmark/datasets/balanced_benchmark.csv` is missing, rebuild it once:
-
-```bash
-python benchmark/balanced_benchmark/build_dataset.py
-```
-
-Prepare tool-specific inputs:
-
-```bash
-python benchmark/balanced_benchmark/prepare_inputs.py
-```
-
-Run all tool wrappers:
-
-```bash
-bash benchmark/balanced_benchmark/run_tools.sh
-```
-
-Normalize outputs and compute shared label-based metrics:
-
-```bash
-python benchmark/balanced_benchmark/evaluate_outputs.py
-```
-
-Create a 4-panel summary plot for precision, recall, specificity, and F1:
-
-```bash
-python benchmark/balanced_benchmark/plot_metrics.py
-```
-
-### Outputs
-
-- prepared inputs: `benchmark/prepared_inputs/balanced_benchmark/`
-- raw tool outputs: `results/{tool}/balanced_benchmark/`
-- normalized per-tool outputs: `benchmark/evaluated/balanced_benchmark/{tool}.csv`
-- summary metrics: `benchmark/evaluated/balanced_benchmark/metrics.csv`
-- summary plot: `benchmark/evaluated/balanced_benchmark/metrics_4panel.png`
-
-### Tool-Specific Prepared Inputs
-
-- `deepmir`: original 200 nt sequence FASTA
-- `deepmirgene`: original 200 nt sequence FASTA
-- `dnnpremir`: 180 nt crop
-- `mirdnn`: 160 nt crop
-- `mire2e`: 100 nt target-aware crop
-- `mustard`: 100 nt target-aware BED intervals, static mode, `MuStARD-mirSFC-U`
-  with `sequence,RNAfold,conservation`
-
-The `mire2e` and `mustard` 100 nt inputs are shifted when needed so every positive still fully contains the target pre-miRNA.
-
-### Evaluation Notes
-
-- metrics are restricted to values available for every tool: `tp`, `fp`, `tn`, `fn`, `precision`, `recall`, `specificity`, `accuracy`, `f1`, `mcc`
-- MuStARD is normalized using `class_0` as the positive class, matching its source training/evaluation code
-- this benchmark is a candidate-level collapsed balanced benchmark derived from eligible 200 nt source windows, not the full chr14 truth set or the full scan benchmark
-
-## Scan Benchmark
-
-The scan benchmark searches full `chr14` and evaluates recovered precursor loci:
-
-- implementation: `benchmark/scan_benchmark/`
-- search space: `benchmark/data/chr14.fa`
-- truth loci: `benchmark/data/hsa-precursors-no-v2.bed` filtered to `chr14`
-- default result prefix: `scan_chr14`
-
-This is one shared scan benchmark for all tools. It is intentionally a common
-evaluation setup, not a paper-identical native scan protocol for every model:
-
-- `mire2e` and `mustard` use native scan mode
-- `deepmir`, `deepmirgene`, `dnnpremir`, and `mirdnn` use externally generated sliding windows over `chr14`
-
-### Full Pipeline
-
-Prepare chunked scan inputs:
-
-```bash
-python benchmark/scan_benchmark/prepare_inputs.py
-```
-
-Run all tool wrappers chunk by chunk:
-
-```bash
-bash benchmark/scan_benchmark/run_tools.sh
-```
-
-The scan runner now uses bounded per-tool chunk parallelism by default:
-`deepmir=2`, `deepmirgene=2`, `dnnpremir=1`, `mirdnn=1`, `mire2e=1`,
-`mustard=1`.
-
-Override the defaults when needed:
-
-```bash
-bash benchmark/scan_benchmark/run_tools.sh \
-  --jobs-default 1 \
-  --jobs deepmir=3,deepmirgene=3,mirdnn=2
-```
-
-Normalize raw scan outputs, merge positive windows into loci, and compute locus-level metrics:
-
-```bash
-python benchmark/scan_benchmark/evaluate_outputs.py
-```
-
-### Outputs
-
-- prepared inputs: `benchmark/prepared_inputs/scan_benchmark/`
-- raw tool outputs: `results/{tool}/scan_chr14/{chunk_id}/`
-- normalized window outputs: `benchmark/evaluated/scan_benchmark/{tool}.windows.csv`
-- merged locus outputs: `benchmark/evaluated/scan_benchmark/{tool}.loci.csv`
-- summary metrics: `benchmark/evaluated/scan_benchmark/metrics.csv`
-
-### Scan Preparation
-
-- chunk size defaults to `1,000,000` bp with `200` bp overlap for native scan tools
-- non-native scan windows use a global stride of `50` bp by default
-- externally generated windows containing ambiguous bases (for example `N` in assembly gaps) are skipped before running the candidate-only tools
-- external window sizes:
-  - `deepmir`: `200`
-  - `deepmirgene`: `200`
-  - `dnnpremir`: `180`
-  - `mirdnn`: `160`
-
-This benchmark is substantially heavier than the balanced benchmark. Start with `--tools` if you want to run only one or two tools first.
-
-### Scan Evaluation Notes
-
-- score threshold is fixed at `0.5`
-- native chunk overlaps are deduplicated by exact `(chrom, start, end, strand)` before locus merging
-- positive windows are merged into loci when they overlap on the same strand
-- a predicted locus counts as a hit when it overlaps at least `50%` of a truth locus
-- each truth locus can be matched at most once
-- metrics are locus-level:
-  - `predicted_loci`
-  - `matched_truth_loci`
-  - `false_positive_loci`
-  - `precision_locus`
-  - `locus_recall`
-  - `fp_per_mb`
-
-### Balanced Evaluation Notes
-
-- score threshold is fixed at `0.5` for score-based tools
-- `deepmir`, `deepmirgene`, and `dnnpremir` only emit hard class labels in the current wrappers, so AUROC/AUPRC are not meaningful for them without exposing continuous scores
-- `mirdnn`, `mire2e`, and `mustard` emit continuous scores, so AUROC/AUPRC can be computed for those tools
-- MuStARD balanced predictions are two-column probabilities in `(class_0, class_1)` order; the positive pre-miRNA class is column `1`
-
-## Validation
-
-Run the repository validation checks after updating prepared inputs, configs, or
-benchmark code:
-
-```bash
-python benchmark/validate_benchmarks.py
-```
-
-The validator checks:
-
-- balanced benchmark dataset counts and the `55`/`60` source-window caveat
-- compatibility between the refactored balanced benchmark pipeline and the saved legacy `1_1_collapsed` metrics, when those results are present
-- scan chunk coverage and window-count consistency for the prepared chr14 scan manifests
+- ViennaRNA (`RNAfold`)
+- Python 3
+- Tool Docker images from `tools/<tool>/setup.sh` for containerized training
 
 ## Download Data
 
-See `download/README.md` for data download scripts.
+Download MirGeneDB precursor BED files and UCSC genome FASTA files with the
+scripts in `benchmark/download/`.
 
-## Folding Pipeline
-
-Runs RNAfold on sliding windows (default: 200bp, step 50bp) across sequences.
+The current diverse species panel is handled by:
 
 ```bash
-python benchmark/fold/run_folding.py --input benchmark/data/chr14.fa
+bash benchmark/download/download_diverse20.sh
 ```
 
-**Parameters:**
-- `--input`: Input FASTA file
-- `--output`: Output directory (default: output/fold_output)
-- `--window`: Window size (default: 200)
-- `--step`: Step size (default: 50)
-- `--chr`: Chromosomes to process (default: all)
-- `--cpus`: Number of CPUs (default: 8)
-- `--dna`: Keep DNA bases (default: converts T→U)
-- `--single_strand`: Only forward strand (default: both strands)
-- `--max_repeat_frac`: Max repeat fraction (default: 0.1)
-
-**Outputs:**
-- `output/fold_output/windows.fa`: Sliding windows FASTA
-- `output/fold_output/windows.fold`: RNAfold output
-- `output/fold_output/results.csv`: Window data
-- `output/fold_output/mfe_kde.png`: MFE distribution plot
-
-## Find miRNA-Containing Windows
+For a single species:
 
 ```bash
-python benchmark/fold/find_mirna_windows.py \
-  --csv output/fold_output/results.csv \
+bash benchmark/download/download_species.sh hsa
+```
+
+See `benchmark/download/README.md` for details.
+
+## Single-Species Dataset
+
+Build a 1:5 positive/negative dataset from one genome and BED file:
+
+```bash
+python benchmark/train_data/build_dataset.py \
+  --genome benchmark/data/chr14.fa \
   --bed benchmark/data/hsa-precursors-no-v2.bed \
-  --output output/fold_output/positives.csv \
-  --output_collapsed output/fold_output/positives_collapsed.csv \
-  --summary output/fold_output/summary.txt \
-  --plot output/fold_output/mirna_mfe.png
+  --output-dir data/train \
+  --ratio 5 \
+  --window 200 \
+  --step 50 \
+  --chr chr14
 ```
 
-**Notes:**
-- `positives.csv` contains **all** windows that fully contain a pre-miRNA (multiple windows per miRNA).
-- `positives_collapsed.csv` contains **one window per miRNA**, chosen by closest window center to the miRNA midpoint (ties broken by lower MFE, then earlier start).
+This produces canonical windows plus tool-specific inputs under
+`data/train/tool_inputs/<tool>/`.
 
-## Sample Negatives & Build Datasets
+## Multispecies Dataset
 
-This step produces **four datasets**:
-1) `balanced.csv`: all positives + sampled negatives (1:1, overlapping)  
-2) `imbalanced.csv`: all positives + all negatives (overlapping)  
-3) `balanced_collapsed.csv`: collapsed positives (one per miRNA) + sampled **non-overlapping** negatives (1:1)  
-4) `imbalanced_collapsed.csv`: collapsed positives + all **non-overlapping** negatives  
-
-Negative sampling matches MFE, dinucleotide, and structure distributions of positives **only for the 1:1 datasets** (`balanced.csv` and `balanced_collapsed.csv`). The imbalanced datasets use all negatives (no matching).
+Build train, validation, same-species held-out-chromosome test, and held-out
+species test splits:
 
 ```bash
-python benchmark/make_negative_set/sample_negatives.py \
-  --positives output/fold_output/positives.csv \
-  --positives_collapsed output/fold_output/positives_collapsed.csv \
-  --all_windows output/fold_output/results.csv
+python benchmark/train_data/build_multispecies_dataset.py \
+  --species-data-dir benchmark/data/species \
+  --output-dir data/train_multispecies \
+  --ratio 5 \
+  --window 200 \
+  --step 50
 ```
 
-**Parameters:**
-- `--positives`: CSV with positive windows
-- `--positives_collapsed`: Optional CSV with one window per miRNA (collapsed positives)
-- `--all_windows`: CSV with all windows
-- `--balanced`: Output CSV with combined dataset (default: output/sample_negatives_output/balanced.csv)
-- `--imbalanced`: Output CSV with combined dataset using all negatives (default: output/sample_negatives_output/imbalanced.csv)
-- `--balanced_collapsed`: Output CSV for collapsed positives + non-overlapping negatives (default: output/sample_negatives_output/balanced_collapsed.csv)
-- `--imbalanced_collapsed`: Output CSV for collapsed positives + all non-overlapping negatives (default: output/sample_negatives_output/imbalanced_collapsed.csv)
-- `--plot_dir`: Directory for plots (default: output/sample_negatives_output/plots)
-- `--match_strand`: Match strand distribution (default: on)
-- `--match_chr`: Match chromosome distribution (default: on)
-- `--seed`: Random seed (default: 42)
-- `--nonoverlap_seed`: Seed for non-overlapping negative selection (default: 42)
-- `--mfe_weight`: Weight for MFE feature (default: 2.0)
-- `--dinuc_weight`: Weight for dinucleotide features (default: 1.0)
-- `--struct_weight`: Weight for structure features (default: 1.0)
-- `--complexity_weight`: Weight for complexity feature (default: 1.0)
+The multispecies builder prefixes contigs as `<species>__<contig>`, reserves
+one positive-bearing chromosome/scaffold per training species for validation,
+reserves another for same-species testing, and holds out configured species for
+external testing.
 
-**Matching features (22 total):**
-- MFE (1)
-- Dinucleotide frequencies (16)
-- Structure features (4): stem_length, loop_size, bulge_count, paired_fraction
-- Sequence complexity (1): Shannon entropy
+## Tool Inputs
 
-**Outputs:**
-- `output/sample_negatives_output/balanced.csv`: All positives + sampled negatives (1:1, overlapping)
-- `output/sample_negatives_output/imbalanced.csv`: All positives + all negatives (overlapping)
-- `output/sample_negatives_output/balanced_collapsed.csv`: Collapsed positives + sampled non-overlapping negatives (1:1)
-- `output/sample_negatives_output/imbalanced_collapsed.csv`: Collapsed positives + all non-overlapping negatives
-- `output/sample_negatives_output/plots/`: Comparison plots
+`benchmark/train_data/prepare_tool_inputs.py` writes the files consumed by
+training wrappers:
+
+- `positive.fa`, `negative.fa`
+- `validation_positive.fa`, `validation_negative.fa`
+- `test_chrom_positive.fa`, `test_chrom_negative.fa`
+- `test_species_positive.fa`, `test_species_negative.fa`
+- matching BED and metadata files where a tool needs intervals
+
+Each tool receives the representation expected by its implementation, while all
+examples originate from the shared canonical dataset.
+
+## Train Tools
+
+After building tool images, run a smoke training pass:
+
+```bash
+for tool in deepmir deepmirgene dnnpremir mirdnn mire2e mustard; do
+  python tools/train.py --tool "$tool" --run-name smoke_gpu_1to5
+done
+```
+
+The training wrapper passes `--gpus all` to Docker and uses CUDA by default.
