@@ -1,5 +1,5 @@
 # dnnPreMiR Configuration
-# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
+# Default smoke input committed with the repository.
 
 # Required parameters
-input: benchmark/prepared_inputs/balanced_benchmark/dnnpremir/balanced_benchmark.fa
+input: benchmark/data/tool_smoke_test.fa

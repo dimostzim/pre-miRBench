@@ -1,8 +1,8 @@
 # MuStARD Configuration
-# Defaults assume benchmark/balanced_benchmark/prepare_inputs.py has been run.
+# Default smoke input committed with the repository.
 
 # Required parameters
-targetIntervals: benchmark/prepared_inputs/balanced_benchmark/mustard/balanced_benchmark.bed
+targetIntervals: benchmark/data/mustard_smoke_test.bed
 genome: benchmark/data/chr14.fa
 consDir: benchmark/data
 
