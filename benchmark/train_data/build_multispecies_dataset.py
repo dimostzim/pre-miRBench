@@ -194,7 +194,7 @@ def write_split_summary(path, rows):
 def parse_args():
     parser = argparse.ArgumentParser(description="Build a prefixed multi-species 1:N training dataset.")
     parser.add_argument("--panel", required=True, help="panel.tsv from benchmark/download/download_diverse20.sh")
-    parser.add_argument("--output-dir", default="data/train_diverse20")
+    parser.add_argument("--output-dir", default="data/train/diverse20")
     parser.add_argument("--work-dir", default="benchmark/train_data/work_diverse20")
     parser.add_argument("--species", default=None, help="Comma-separated species codes to include. Default: all auto species in panel.")
     parser.add_argument("--heldout-species", default="dre,dme")

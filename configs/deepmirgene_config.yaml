@@ -2,7 +2,7 @@
 # Default smoke input committed with the repository.
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
+input: data/smoke/tool_smoke_test.fa
 
 # Optional parameters (defaults shown)
 model: null            # default: use bundled model (in deepmirgene_src/inference/model/new_test.hdf5)

@@ -2,4 +2,4 @@
 # Default smoke input committed with the repository.
 
 # Required parameters
-input: benchmark/data/tool_smoke_test.fa
+input: data/smoke/tool_smoke_test.fa

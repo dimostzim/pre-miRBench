@@ -284,7 +284,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
 def generated_inference_config(tool, repo_root, config, output_dir):
     artifact = rel_repo_path(repo_root, output_dir)
     inference_input = config.get("inference_input")
-    fasta_input = inference_input or "benchmark/data/tool_smoke_test.fa"
+    fasta_input = inference_input or "data/smoke/tool_smoke_test.fa"
 
     if tool == "mire2e":
         return {
@@ -308,7 +308,7 @@ def generated_inference_config(tool, repo_root, config, output_dir):
         }
     if tool == "dnnpremir":
         return {
-            "input": inference_input or config.get("inference_fasta", "benchmark/data/tool_smoke_test.fa"),
+            "input": inference_input or config.get("inference_fasta", "data/smoke/tool_smoke_test.fa"),
             "model": f"{artifact}/CNN_model.h5",
             "seq_length": 180,
         }

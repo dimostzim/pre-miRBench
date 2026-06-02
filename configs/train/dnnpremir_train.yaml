@@ -21,4 +21,4 @@ seed: 42
 
 # dnnPreMiR inference consumes FASTA, so set this to the file you want the
 # generated inference config to score.
-inference_fasta: benchmark/data/tool_smoke_test.fa
+inference_fasta: data/smoke/tool_smoke_test.fa

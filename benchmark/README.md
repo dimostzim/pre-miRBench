@@ -34,8 +34,8 @@ Build a 1:5 positive/negative dataset from one genome and BED file:
 
 ```bash
 python benchmark/train_data/build_dataset.py \
-  --genome benchmark/data/chr14.fa \
-  --bed benchmark/data/hsa-precursors-no-v2.bed \
+  --genome data/train/raw/hsa_chr14/chr14.fa \
+  --bed data/reference/hsa-precursors-no-v2.bed \
   --output-dir data/train \
   --ratio 5 \
   --window 200 \
@@ -53,8 +53,8 @@ species test splits:
 
 ```bash
 python benchmark/train_data/build_multispecies_dataset.py \
-  --species-data-dir benchmark/data/species \
-  --output-dir data/train_multispecies \
+  --panel data/train/raw/diverse20/panel.tsv \
+  --output-dir data/train/diverse20 \
   --ratio 5 \
   --window 200 \
   --step 50
