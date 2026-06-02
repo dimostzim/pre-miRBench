@@ -216,11 +216,25 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
             negative = require_file(repo_root, config, "negative_csv")
             cmd.extend(["--positive_csv", container_path(repo_root, positive, mounts)])
             cmd.extend(["--negative_csv", container_path(repo_root, negative, mounts)])
+            for key, flag in (
+                ("validation_positive_csv", "--validation_positive_csv"),
+                ("validation_negative_csv", "--validation_negative_csv"),
+            ):
+                path = optional_file(repo_root, config, key)
+                if path:
+                    cmd.extend([flag, container_path(repo_root, path, mounts)])
         else:
             positive = require_file(repo_root, config, "positive_fasta")
             negative = require_file(repo_root, config, "negative_fasta")
             cmd.extend(["--positive_fasta", container_path(repo_root, positive, mounts)])
             cmd.extend(["--negative_fasta", container_path(repo_root, negative, mounts)])
+            for key, flag in (
+                ("validation_positive_fasta", "--validation_positive_fasta"),
+                ("validation_negative_fasta", "--validation_negative_fasta"),
+            ):
+                path = optional_file(repo_root, config, key)
+                if path:
+                    cmd.extend([flag, container_path(repo_root, path, mounts)])
         for key, flag in (("architecture", "--architecture"),):
             add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)

@@ -147,8 +147,12 @@ def main():
     parser = argparse.ArgumentParser(description="Train a dnnPreMiR model.")
     parser.add_argument("--positive_fasta")
     parser.add_argument("--negative_fasta")
+    parser.add_argument("--validation_positive_fasta")
+    parser.add_argument("--validation_negative_fasta")
     parser.add_argument("--positive_csv")
     parser.add_argument("--negative_csv")
+    parser.add_argument("--validation_positive_csv")
+    parser.add_argument("--validation_negative_csv")
     parser.add_argument("--output", required=True)
     parser.add_argument("--architecture", choices=["cnn", "rnn", "cnn_rnn"], default="cnn")
     parser.add_argument("--epochs", type=int, default=600)
@@ -173,6 +177,27 @@ def main():
     else:
         raise ValueError("Provide either positive_csv/negative_csv or positive_fasta/negative_fasta")
 
+    validation_data = None
+    validation_split = args.validation_split
+    if args.validation_positive_csv and args.validation_negative_csv:
+        validation_positive_csv = args.validation_positive_csv
+        validation_negative_csv = args.validation_negative_csv
+    elif args.validation_positive_fasta and args.validation_negative_fasta:
+        preprocess_dir = os.path.join(args.output, "preprocessed")
+        validation_positive_csv = fasta_to_csv(
+            args.validation_positive_fasta,
+            os.path.join(preprocess_dir, "validation_positive.csv"),
+            True,
+        )
+        validation_negative_csv = fasta_to_csv(
+            args.validation_negative_fasta,
+            os.path.join(preprocess_dir, "validation_negative.csv"),
+            False,
+        )
+    else:
+        validation_positive_csv = None
+        validation_negative_csv = None
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     source_dir = os.path.join(base_dir, "dnnpremir_src")
     model_factory = load_model_factory(source_dir, args.architecture)
@@ -184,13 +209,23 @@ def main():
     x_dataset = np.array([x for x, _ in examples])
     y_dataset = np.array([y for _, y in examples])
 
+    if validation_positive_csv and validation_negative_csv:
+        validation_examples = read_csv_examples(validation_positive_csv, True)
+        validation_examples.extend(read_csv_examples(validation_negative_csv, False))
+        validation_data = (
+            np.array([x for x, _ in validation_examples]),
+            np.array([y for _, y in validation_examples]),
+        )
+        validation_split = 0.0
+
     model = model_factory()
     model.fit(
         x_dataset,
         y_dataset,
         batch_size=args.batch_size,
         epochs=args.epochs,
-        validation_split=args.validation_split,
+        validation_split=validation_split,
+        validation_data=validation_data,
     )
     output_model = os.path.join(args.output, "CNN_model.h5")
     model.save(output_model)
