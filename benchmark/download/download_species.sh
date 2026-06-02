@@ -10,9 +10,19 @@ Supported species:
   hsa  human        hg38
   mmu  mouse        mm39
   rno  rat          rn7
+  mdo  opossum      monDom5
+  oan  platypus     ornAna2
+  gga  chicken      galGal6
+  aca  anole        anoCar2
+  xtr  X. tropicalis xenTro10
+  cmi  elephant shark calMil1
+  bfl  amphioxus    braFlo1
+  cin  Ciona        ci3
   dme  fruit fly    dm6
   dre  zebrafish    danRer11
+  aga  A. gambiae   anoGam3
   cel  C. elegans   ce11
+  spu  sea urchin   strPur2
 
 Outputs:
   <ucsc_build>.fa
@@ -41,9 +51,19 @@ case "$SPECIES" in
     hsa) BUILD="hg38"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz" ;;
     mmu) BUILD="mm39"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/mm39/bigZips/mm39.fa.gz" ;;
     rno) BUILD="rn7"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/rn7.fa.gz" ;;
+    mdo) BUILD="monDom5"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/monDom5/bigZips/monDom5.fa.gz" ;;
+    oan) BUILD="ornAna2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/ornAna2/bigZips/ornAna2.fa.gz" ;;
+    gga) BUILD="galGal6"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/galGal6/bigZips/galGal6.fa.gz" ;;
+    aca) BUILD="anoCar2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/anoCar2/bigZips/anoCar2.fa.gz" ;;
+    xtr) BUILD="xenTro10"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/xenTro10/bigZips/xenTro10.fa.gz" ;;
+    cmi) BUILD="calMil1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/calMil1/bigZips/calMil1.fa.gz" ;;
+    bfl) BUILD="braFlo1"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/braFlo1/bigZips/braFlo1.fa.gz" ;;
+    cin) BUILD="ci3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/ci3/bigZips/ci3.fa.gz" ;;
     dme) BUILD="dm6"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/dm6/bigZips/dm6.fa.gz" ;;
     dre) BUILD="danRer11"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/danRer11/bigZips/danRer11.fa.gz" ;;
+    aga) BUILD="anoGam3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/anoGam3/bigZips/anoGam3.fa.gz" ;;
     cel) BUILD="ce11"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/ce11/bigZips/ce11.fa.gz" ;;
+    spu) BUILD="strPur2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/strPur2/bigZips/strPur2.fa.gz" ;;
     *)
         echo "Unsupported species code: $SPECIES" >&2
         usage >&2
