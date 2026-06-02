@@ -7,5 +7,5 @@ epochs: 1
 early_stop: 1
 valid_prop: 0.2
 seed: 42
-inference_input: benchmark/data/tool_smoke_test.fa
+inference_input: data/smoke/tool_smoke_test.fa
 inference_batch_size: 1

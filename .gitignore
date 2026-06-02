@@ -30,15 +30,11 @@ tools/deepmirgene/results/
 # unified inference results
 results/
 
-# benchmark
+# generated benchmark/training scratch
 benchmark/output/
 benchmark/download/data/
-benchmark/prepared_inputs
-benchmark/evaluated/
 benchmark/tmp/
 benchmark/train_data/work*/
-benchmark/data/chr*.fa
-benchmark/data/*.wigFix.gz
 
 # generated training data
 data/train/

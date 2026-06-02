@@ -83,7 +83,7 @@ After download, build the prefixed multispecies training dataset:
 ```bash
 python benchmark/train_data/build_multispecies_dataset.py \
   --panel data/train/raw/diverse20/panel.tsv \
-  --output-dir data/train_diverse20 \
+  --output-dir data/train/diverse20 \
   --work-dir benchmark/train_data/work_diverse20 \
   --ratio 5 \
   --window 200 \

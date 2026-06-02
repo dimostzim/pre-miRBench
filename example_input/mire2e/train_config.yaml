@@ -17,6 +17,6 @@ epochs: 1
 structure_epochs: 1
 mfe_epochs: 1
 seed: 42
-inference_input: benchmark/data/tool_smoke_test.fa
+inference_input: data/smoke/tool_smoke_test.fa
 step: 20
 inference_batch_size: 1

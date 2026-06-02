@@ -1,10 +1,10 @@
 # MuStARD Configuration
-# Default smoke input committed with the repository.
+# Default chr14 target intervals; requires downloaded chr14 FASTA/conservation.
 
 # Required parameters
-targetIntervals: benchmark/data/mustard_smoke_test.bed
-genome: benchmark/data/chr14.fa
-consDir: benchmark/data
+targetIntervals: data/reference/hsa_chr14_mustard_targets.bed
+genome: data/train/raw/hsa_chr14/chr14.fa
+consDir: data/train/raw/hsa_chr14
 
 # Optional parameters (defaults shown)
 chromList: chr14           # default: all
