@@ -132,6 +132,7 @@ def parse_args():
     parser.add_argument("--trees", type=int, default=200)
     parser.add_argument("--consensus", type=float, default=0.5)
     parser.add_argument("--score-threshold", type=float, default=0.5)
+    parser.add_argument("--jobs", type=int, default=-1, help="RandomForest worker jobs. Use 1 when running species in parallel.")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -177,7 +178,7 @@ def main():
                 n_estimators=args.trees,
                 random_state=args.seed + round_index * 1000 + member,
                 class_weight="balanced",
-                n_jobs=-1,
+                n_jobs=args.jobs,
             )
             classifier.fit(x_train, y_train)
             member_scores.append(classifier.predict_proba(pool_features)[:, 1])
