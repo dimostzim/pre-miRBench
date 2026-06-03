@@ -107,13 +107,13 @@ def optional_file(repo_root, config, key):
 
 def add_mount(mounts, path, read_only=True):
     path = os.path.abspath(path)
-    if path in mounts:
+    if path in mounts and (read_only or not mounts[path].endswith(":ro")):
         return
     suffix = ":ro" if read_only else ""
     mounts[path] = f"{path}:{path}{suffix}"
 
 
-def container_path(repo_root, path, mounts):
+def container_path(repo_root, path, mounts, read_only=True):
     path = os.path.abspath(path)
     try:
         rel = os.path.relpath(path, repo_root)
@@ -123,13 +123,24 @@ def container_path(repo_root, path, mounts):
     if rel is not None and not rel.startswith("..") and rel != os.pardir:
         return "/work/" + rel.replace(os.sep, "/")
 
-    add_mount(mounts, path)
+    add_mount(mounts, path, read_only=read_only)
     return path
 
 
 def rel_repo_path(repo_root, path):
     rel = os.path.relpath(os.path.abspath(path), repo_root)
     return rel.replace(os.sep, "/")
+
+
+def artifact_path(repo_root, output_dir):
+    output_dir = os.path.abspath(output_dir)
+    try:
+        rel = os.path.relpath(output_dir, repo_root)
+    except ValueError:
+        rel = None
+    if rel is not None and not rel.startswith("..") and rel != os.pardir:
+        return rel.replace(os.sep, "/")
+    return output_dir
 
 
 def add_optional_arg(cmd, flag, value):
@@ -149,7 +160,7 @@ def add_common_training_args(cmd, config):
 
 
 def build_tool_args(tool, repo_root, config, output_dir, mounts):
-    output_arg = "/work/" + rel_repo_path(repo_root, output_dir)
+    output_arg = container_path(repo_root, output_dir, mounts, read_only=False)
     cmd = ["/opt/{}/train.py".format(tool), "--output", output_arg]
 
     if tool in {"mire2e", "mirdnn", "deepmir", "deepmirgene"}:
@@ -288,7 +299,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
 
 
 def generated_inference_config(tool, repo_root, config, output_dir):
-    artifact = rel_repo_path(repo_root, output_dir)
+    artifact = artifact_path(repo_root, output_dir)
     inference_input = config.get("inference_input")
     fasta_input = inference_input or "data/smoke/tool_smoke_test.fa"
 
@@ -353,6 +364,11 @@ def main():
     parser.add_argument("--tool", required=True, choices=TOOLS)
     parser.add_argument("--run-name", required=True, help="Subdirectory under results/training/<tool>/")
     parser.add_argument("--config", help="Defaults to configs/train/<tool>_train.yaml")
+    parser.add_argument(
+        "--output-root",
+        default=None,
+        help="Root for training outputs. Defaults to results/training. Supports env vars such as $SCRATCH.",
+    )
     args = parser.parse_args()
 
     tools_dir = os.path.dirname(os.path.abspath(__file__))
@@ -362,7 +378,12 @@ def main():
     )
     config = load_config(config_path)
 
-    output_dir = os.path.join(repo_root, "results", "training", args.tool, args.run_name)
+    output_root = os.path.expandvars(os.path.expanduser(args.output_root)) if args.output_root else os.path.join(
+        repo_root,
+        "results",
+        "training",
+    )
+    output_dir = os.path.join(os.path.abspath(output_root), args.tool, args.run_name)
     os.makedirs(output_dir, exist_ok=True)
 
     mounts = {}

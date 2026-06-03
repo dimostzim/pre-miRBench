@@ -77,6 +77,26 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertIn("--positive_csv", args)
         self.assertNotIn("--positive_fasta", args)
 
+    def test_external_output_dir_is_writable_mount(self):
+        pos_fa = self.touch("positive.fa")
+        neg_fa = self.touch("negative.fa")
+        output_dir = os.path.join(self.temp_dir.name, "scratch-output", "deepmir", "unit")
+
+        mounts = {}
+        args = self.train.build_tool_args(
+            "deepmir",
+            self.repo_root,
+            {"positive_fasta": pos_fa, "negative_fasta": neg_fa},
+            output_dir,
+            mounts,
+        )
+        inference_config = self.train.generated_inference_config("deepmir", self.repo_root, {}, output_dir)
+
+        self.assertEqual(args[args.index("--output") + 1], output_dir)
+        self.assertIn(os.path.abspath(output_dir), mounts)
+        self.assertFalse(mounts[os.path.abspath(output_dir)].endswith(":ro"))
+        self.assertEqual(inference_config["model"], f"{output_dir}/model.h5")
+
 
 if __name__ == "__main__":
     unittest.main()
