@@ -340,7 +340,7 @@ def generated_inference_config(tool, repo_root, config, output_dir):
             "winSize": config.get("winSize", config.get("maxSize", 200)),
             "step": config.get("step", 5),
             "staticPredFlag": config.get("staticPredFlag", 1),
-            "inputMode": config.get("inputMode", "sequence,RNAfold,conservation"),
+            "inputMode": config.get("inputMode", "sequence,RNAfold"),
             "threads": config.get("threads", 10),
             "modelDirName": config.get("modelDirName", "results"),
             "intermDir": config.get("intermDir", "results/mustard_intermediate"),

@@ -1,5 +1,5 @@
 # MuStARD Configuration
-# Default chr14 target intervals; requires downloaded chr14 FASTA/conservation.
+# Default chr14 target intervals; requires downloaded chr14 FASTA.
 
 # Required parameters
 targetIntervals: data/reference/hsa_chr14_mustard_targets.bed
@@ -14,7 +14,7 @@ modelType: CNN             # default: CNN
 winSize: 100               # default: 100
 step: 5                    # default: 5
 staticPredFlag: 1          # default: 0
-inputMode: sequence,RNAfold,conservation  # default: sequence,RNAfold,conservation
+inputMode: sequence,RNAfold  # default for multispecies training without conservation tracks
 threads: 10                # default: 10
 modelDirName: results      # default: results
 intermDir: results/mustard_intermediate  # default: same
