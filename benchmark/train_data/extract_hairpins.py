@@ -9,6 +9,7 @@ of benchmark/train_data.
 """
 import argparse
 import csv
+import math
 import os
 import subprocess
 import tempfile
@@ -191,6 +192,11 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=10000)
     parser.add_argument("--max-windows", type=int, default=0, help="Stop after folding this many candidate windows. 0 = no cap.")
     parser.add_argument("--single-strand", action="store_true", help="Scan only the forward strand.")
+    parser.add_argument(
+        "--balance-bed-chroms",
+        action="store_true",
+        help="When max-windows is capped, divide the scan across BED-positive chromosomes instead of scanning FASTA order.",
+    )
     return parser.parse_args()
 
 
@@ -205,6 +211,16 @@ def main():
         chromosome_filter = {chrom.strip() for chrom in args.chromosomes.split(",") if chrom.strip()}
 
     excluded = load_excluded_intervals(args.bed, args.bed_name_suffix)
+    per_chrom_max_windows = 0
+    if args.balance_bed_chroms:
+        bed_chroms = set(excluded)
+        if chromosome_filter:
+            bed_chroms &= chromosome_filter
+        if bed_chroms:
+            chromosome_filter = bed_chroms
+            if args.max_windows:
+                per_chrom_max_windows = max(1, math.ceil(args.max_windows / len(bed_chroms)))
+
     batch = []
     folded = 0
     kept = 0
@@ -239,6 +255,7 @@ def main():
             skipped_chrom += 1
             continue
         chrom_intervals = excluded.get(chrom, [])
+        chrom_windows = 0
         max_start = len(chrom_sequence) - args.window
         if max_start < 0:
             continue
@@ -279,14 +296,21 @@ def main():
                         "label": "0",
                     }
                 )
+                chrom_windows += 1
 
                 if len(batch) >= args.batch_size:
                     flush_batch()
-                if args.max_windows and folded + len(batch) >= args.max_windows:
+                if per_chrom_max_windows and chrom_windows >= per_chrom_max_windows:
                     break
-            if args.max_windows and folded + len(batch) >= args.max_windows:
+                if not per_chrom_max_windows and args.max_windows and folded + len(batch) >= args.max_windows:
+                    break
+            if per_chrom_max_windows and chrom_windows >= per_chrom_max_windows:
                 break
-        if args.max_windows and folded + len(batch) >= args.max_windows:
+            if not per_chrom_max_windows and args.max_windows and folded + len(batch) >= args.max_windows:
+                break
+        if per_chrom_max_windows and batch:
+            flush_batch()
+        if not per_chrom_max_windows and args.max_windows and folded + len(batch) >= args.max_windows:
             break
 
     if batch:
@@ -301,6 +325,9 @@ def main():
     print(f"skipped repeat/N: {skipped_repeat}")
     if chromosome_filter:
         print(f"chromosomes skipped: {skipped_chrom}")
+    if per_chrom_max_windows:
+        print(f"balanced BED chromosomes: {len(chromosome_filter)}")
+        print(f"max windows per BED chromosome: {per_chrom_max_windows}")
     print(f"output: {args.output}")
 
     if args.stats_output:
@@ -312,6 +339,8 @@ def main():
             writer.writerow(["skipped_overlap", skipped_overlap])
             writer.writerow(["skipped_repeat_or_n", skipped_repeat])
             writer.writerow(["chromosomes_skipped", skipped_chrom])
+            writer.writerow(["balanced_bed_chromosomes", len(chromosome_filter) if per_chrom_max_windows else 0])
+            writer.writerow(["max_windows_per_bed_chromosome", per_chrom_max_windows])
 
 
 if __name__ == "__main__":
