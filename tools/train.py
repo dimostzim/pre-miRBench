@@ -113,6 +113,24 @@ def add_mount(mounts, path, read_only=True):
     mounts[path] = f"{path}:{path}{suffix}"
 
 
+def add_repo_symlink_target_mounts(repo_root, path, mounts, read_only=True):
+    path = os.path.abspath(path)
+    try:
+        rel = os.path.relpath(path, repo_root)
+    except ValueError:
+        return
+    if rel.startswith("..") or rel == os.pardir:
+        return
+
+    current = os.path.abspath(repo_root)
+    for part in rel.split(os.sep):
+        current = os.path.join(current, part)
+        if os.path.islink(current):
+            target = os.path.realpath(current)
+            mount_path = target if os.path.isdir(target) else os.path.dirname(target)
+            add_mount(mounts, mount_path, read_only=read_only)
+
+
 def container_path(repo_root, path, mounts, read_only=True):
     path = os.path.abspath(path)
     try:
@@ -121,6 +139,7 @@ def container_path(repo_root, path, mounts, read_only=True):
         rel = None
 
     if rel is not None and not rel.startswith("..") and rel != os.pardir:
+        add_repo_symlink_target_mounts(repo_root, path, mounts, read_only=read_only)
         return "/work/" + rel.replace(os.sep, "/")
 
     add_mount(mounts, path, read_only=read_only)

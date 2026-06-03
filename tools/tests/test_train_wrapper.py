@@ -140,6 +140,27 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertFalse(mounts[os.path.abspath(output_dir)].endswith(":ro"))
         self.assertEqual(inference_config["model"], f"{output_dir}/model.h5")
 
+    def test_repo_symlink_targets_are_mounted(self):
+        external_dir = tempfile.TemporaryDirectory()
+        repo_dir = tempfile.TemporaryDirectory(dir=self.repo_root)
+        self.addCleanup(external_dir.cleanup)
+        self.addCleanup(repo_dir.cleanup)
+
+        external_file = os.path.join(external_dir.name, "negative.fa")
+        with open(external_file, "w") as handle:
+            handle.write(">neg\nACGU\n")
+
+        symlink_dir = os.path.join(repo_dir.name, "linked_data")
+        os.symlink(external_dir.name, symlink_dir)
+        repo_file = os.path.join(symlink_dir, "negative.fa")
+
+        mounts = {}
+        container_path = self.train.container_path(self.repo_root, repo_file, mounts)
+
+        self.assertTrue(container_path.startswith("/work/"))
+        self.assertIn(os.path.abspath(external_dir.name), mounts)
+        self.assertTrue(mounts[os.path.abspath(external_dir.name)].endswith(":ro"))
+
 
 if __name__ == "__main__":
     unittest.main()
