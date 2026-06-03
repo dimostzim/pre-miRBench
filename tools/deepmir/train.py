@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-import imageio
+import imageio.v2 as imageio
 import keras
 import numpy as np
 import tensorflow as tf
