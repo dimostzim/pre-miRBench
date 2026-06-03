@@ -10,6 +10,7 @@ Supported species:
   hsa  human        hg38
   mmu  mouse        mm39
   rno  rat          rn7
+  cfa  dog          canFam3
   cpo  guinea pig   cavPor3
   ocu  rabbit       oryCun2
   eca  horse        equCab3
@@ -56,6 +57,7 @@ case "$SPECIES" in
     hsa) BUILD="hg38"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz" ;;
     mmu) BUILD="mm39"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/mm39/bigZips/mm39.fa.gz" ;;
     rno) BUILD="rn7"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/rn7.fa.gz" ;;
+    cfa) BUILD="canFam3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/canFam3/bigZips/canFam3.fa.gz" ;;
     cpo) BUILD="cavPor3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/cavPor3/bigZips/cavPor3.fa.gz" ;;
     ocu) BUILD="oryCun2"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/oryCun2/bigZips/oryCun2.fa.gz" ;;
     eca) BUILD="equCab3"; GENOME_URL="https://hgdownload.soe.ucsc.edu/goldenPath/equCab3/bigZips/equCab3.fa.gz" ;;
