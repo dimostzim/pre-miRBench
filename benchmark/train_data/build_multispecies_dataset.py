@@ -10,13 +10,14 @@ positive-bearing chromosomes exist.
 """
 import argparse
 import csv
+import math
 import os
+import random
 import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from build_dataset import select_negatives
 from prepare_tool_inputs import DEFAULT_TARGET_LENGTHS, prepare_tool_inputs
 
 
@@ -129,16 +130,46 @@ def append_file(source, destination):
             output_handle.write(line)
 
 
-def choose_holdout_chroms(positives, species, heldout_species):
+def unique_rows_by_window(rows):
+    unique = {}
+    for row in rows:
+        unique.setdefault(row["window_id"], row)
+    return list(unique.values())
+
+
+def choose_holdout_chroms(positives, negatives, species, heldout_species, ratio):
     if species in heldout_species:
-        return "", ""
-    counts = Counter(row["chrom"] for row in positives)
-    ranked = [chrom for chrom, _count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
-    if len(ranked) >= 3:
-        return ranked[1], ranked[2]
-    if len(ranked) == 2:
-        return ranked[1], ""
-    return "", ""
+        return "", "", []
+    positive_counts = Counter(row["chrom"] for row in positives)
+    negative_counts = Counter(row["chrom"] for row in unique_rows_by_window(negatives))
+    ranked = [chrom for chrom, _count in sorted(positive_counts.items(), key=lambda item: (-item[1], item[0]))]
+    skipped = []
+    eligible = []
+    for chrom in ranked:
+        required = math.ceil(positive_counts[chrom] * ratio)
+        available = negative_counts[chrom]
+        if available >= required:
+            eligible.append(chrom)
+        else:
+            skipped.append(
+                f"{chrom}: holdout skipped, needs {required} negatives for "
+                f"{positive_counts[chrom]} positives but has {available}"
+            )
+
+    issues = []
+    if skipped:
+        examples = "; ".join(skipped[:5])
+        suffix = f"; +{len(skipped) - 5} more" if len(skipped) > 5 else ""
+        issues.append(f"{len(skipped)} chromosomes/scaffolds ineligible for holdout ({examples}{suffix})")
+
+    # Keep the largest positive-bearing chromosome in training when possible.
+    train_anchor = ranked[0] if ranked else None
+    holdout_candidates = [chrom for chrom in eligible if chrom != train_anchor]
+    if len(holdout_candidates) >= 2:
+        return holdout_candidates[0], holdout_candidates[1], issues
+    if len(holdout_candidates) == 1:
+        return holdout_candidates[0], "", issues
+    return "", "", issues
 
 
 def split_for_row(row, species, heldout_species, test_chrom, valid_chrom):
@@ -172,6 +203,40 @@ def assign_final_records(rows, species, label, start_index):
     return output
 
 
+def select_negatives_for_split(positives, hard_negatives, scored_negatives, ratio, seed):
+    target = math.ceil(len(positives) * ratio)
+    chosen = []
+    seen = set()
+
+    def add_rows(rows):
+        for row in rows:
+            if len(chosen) >= target:
+                break
+            key = row["window_id"]
+            if key in seen:
+                continue
+            seen.add(key)
+            chosen.append(row)
+
+    hard_sorted = sorted(
+        hard_negatives,
+        key=lambda row: (
+            int(row.get("hard_round") or 999999),
+            -float(row.get("score") or 0.0),
+        ),
+    )
+    scored_sorted = sorted(scored_negatives, key=lambda row: float(row.get("score") or 0.0), reverse=True)
+    add_rows(hard_sorted)
+    add_rows(scored_sorted)
+
+    if len(chosen) < target:
+        remaining = [row for row in scored_negatives if row["window_id"] not in seen]
+        random.Random(seed).shuffle(remaining)
+        add_rows(remaining)
+
+    return chosen, target - len(chosen)
+
+
 def write_split_summary(path, rows):
     fieldnames = [
         "species",
@@ -187,6 +252,7 @@ def write_split_summary(path, rows):
         "test_chrom_neg",
         "test_species_pos",
         "test_species_neg",
+        "issues",
     ]
     write_csv(path, rows, fieldnames=fieldnames)
 
@@ -350,26 +416,40 @@ def main():
         positives = read_csv(positives_csv)
         hard_negatives = read_csv(hard_csv)
         scored_negatives = read_csv(scores_csv)
-        test_chrom, valid_chrom = choose_holdout_chroms(positives, species, heldout_species)
+        negative_pool = unique_rows_by_window(hard_negatives + scored_negatives)
+        test_chrom, valid_chrom, holdout_issues = choose_holdout_chroms(
+            positives,
+            negative_pool,
+            species,
+            heldout_species,
+            args.ratio,
+        )
 
         positives_by_split = group_by_split(positives, species, heldout_species, test_chrom, valid_chrom)
         hard_by_split = group_by_split(hard_negatives, species, heldout_species, test_chrom, valid_chrom)
         scored_by_split = group_by_split(scored_negatives, species, heldout_species, test_chrom, valid_chrom)
 
         species_rows = []
+        species_issues = list(holdout_issues)
         pos_index = 1
         neg_index = 1
         for split in ("train", "valid", "test_chrom", "test_species"):
             split_positives = positives_by_split.get(split, [])
             if not split_positives:
                 continue
-            split_negatives = select_negatives(
+            split_negatives, shortfall = select_negatives_for_split(
                 split_positives,
                 hard_by_split.get(split, []),
                 scored_by_split.get(split, []),
                 args.ratio,
                 args.seed + species_index,
             )
+            if shortfall > 0:
+                requested = math.ceil(len(split_positives) * args.ratio)
+                species_issues.append(
+                    f"{split}: requested {requested} negatives for "
+                    f"{len(split_positives)} positives but selected {len(split_negatives)}"
+                )
             species_rows.extend(assign_final_records(split_positives, species, 1, pos_index))
             species_rows.extend(assign_final_records(split_negatives, species, 0, neg_index))
             pos_index += len(split_positives)
@@ -392,6 +472,7 @@ def main():
                 "test_chrom_neg": counts[("test_chrom", "0")],
                 "test_species_pos": counts[("test_species", "1")],
                 "test_species_neg": counts[("test_species", "0")],
+                "issues": "; ".join(species_issues),
             }
         )
 
@@ -408,6 +489,13 @@ def main():
     print(f"split summary: {split_summary}")
     print(f"combined genome: {combined_genome}")
     print(f"tool inputs: {output_dir / 'tool_inputs'}")
+    issue_rows = [row for row in summary_rows if row.get("issues")]
+    if issue_rows:
+        print("\nissues")
+        for row in issue_rows:
+            print(f"{row['species']}: {row['issues']}")
+    else:
+        print("issues: none")
 
 
 if __name__ == "__main__":
