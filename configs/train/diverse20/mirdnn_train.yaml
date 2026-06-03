@@ -3,12 +3,14 @@
 # windows. mirDNN inputs are center-cropped to seq_length before folding.
 positive_fasta: data/train/diverse20/tool_inputs/mirdnn/positive.fa
 negative_fasta: data/train/diverse20/tool_inputs/mirdnn/negative.fa
+validation_positive_fasta: data/train/diverse20/tool_inputs/mirdnn/validation_positive.fa
+validation_negative_fasta: data/train/diverse20/tool_inputs/mirdnn/validation_negative.fa
 
 device: cuda:0
 seq_length: 160
 batch_size: 1024
-epochs: 150
-early_stop: 100
+epochs: 600
+early_stop: 20
 valid_prop: 0.1
 seed: 42
 

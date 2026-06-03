@@ -16,9 +16,9 @@ length: 100
 batch_size: 32
 structure_batch_size: 32
 mfe_batch_size: 32
-epochs: 150
-structure_epochs: 200
-mfe_epochs: 200
+epochs: 600
+structure_epochs: 600
+mfe_epochs: 600
 seed: 42
 
 # Optional inference input for the generated inference_config.yaml.

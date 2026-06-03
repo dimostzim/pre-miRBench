@@ -2,8 +2,8 @@
 # MuStARD trains from intervals plus genome inputs, not FASTA.
 positiveIntervals: data/train/diverse20/tool_inputs/mustard/positive.bed
 negativeIntervals: data/train/diverse20/tool_inputs/mustard/negative.bed
-testPositiveIntervals: null
-testNegativeIntervals: null
+testPositiveIntervals: data/train/diverse20/tool_inputs/mustard/test_chrom_positive.bed
+testNegativeIntervals: data/train/diverse20/tool_inputs/mustard/test_chrom_negative.bed
 validationPositiveIntervals: data/train/diverse20/tool_inputs/mustard/validation_positive.bed
 validationNegativeIntervals: data/train/diverse20/tool_inputs/mustard/validation_negative.bed
 genome: data/train/diverse20/genome.fa

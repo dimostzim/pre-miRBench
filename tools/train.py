@@ -159,6 +159,12 @@ def add_common_training_args(cmd, config):
         add_optional_arg(cmd, flag, config.get(key))
 
 
+def add_early_stopping_args(cmd, config, include_monitor=True):
+    add_optional_arg(cmd, "--early_stopping_patience", config.get("early_stopping_patience"))
+    if include_monitor:
+        add_optional_arg(cmd, "--early_stopping_monitor", config.get("early_stopping_monitor"))
+
+
 def build_tool_args(tool, repo_root, config, output_dir, mounts):
     output_arg = container_path(repo_root, output_dir, mounts, read_only=False)
     cmd = ["/opt/{}/train.py".format(tool), "--output", output_arg]
@@ -220,6 +226,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
         ):
             add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)
+        add_early_stopping_args(cmd, config, include_monitor=False)
 
     elif tool == "dnnpremir":
         if config.get("positive_csv") and config.get("negative_csv"):
@@ -249,6 +256,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
         for key, flag in (("architecture", "--architecture"),):
             add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)
+        add_early_stopping_args(cmd, config)
 
     elif tool == "deepmir":
         for key, flag in (
@@ -261,9 +269,11 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
         ):
             add_optional_arg(cmd, flag, config.get(key))
         add_common_training_args(cmd, config)
+        add_early_stopping_args(cmd, config)
 
     elif tool == "deepmirgene":
         add_common_training_args(cmd, config)
+        add_early_stopping_args(cmd, config)
 
     elif tool == "mustard":
         for key, flag, expect_dir in (

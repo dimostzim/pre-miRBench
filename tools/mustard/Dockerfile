@@ -44,6 +44,8 @@ RUN sed -i 's/from keras\.optimizers import SGD, RMSprop, Adam/from tensorflow.k
     mustard_src/src/utilities/python/train_CNN.py \
     mustard_src/src/utilities/python/train_CAE.py
 
+RUN python -c 'from pathlib import Path; p = Path("mustard_src/src/utilities/python/train_CNN.py"); s = p.read_text(); p.write_text(s.replace("patience = 40", "patience = 20"))'
+
 RUN sed -i "s/gzip.open(input_file,'r')/gzip.open(input_file,'rt')/g" \
     mustard_src/src/lib/python/Files/Format.py
 

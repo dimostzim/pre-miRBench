@@ -15,9 +15,11 @@ modules: 3
 dense_units: 256
 filters: 28
 batch_size: 128
-epochs: 100
+epochs: 600
 pretrain_epochs: 40
 validation_split: 0.2
+early_stopping_patience: 20
+early_stopping_monitor: val_auprc
 seed: 42
 
 inference_input: null

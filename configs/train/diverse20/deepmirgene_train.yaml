@@ -8,8 +8,10 @@ validation_negative_fasta: data/train/diverse20/tool_inputs/deepmirgene/validati
 
 device: cuda
 batch_size: 256
-epochs: 100
+epochs: 600
 validation_split: 0.2
+early_stopping_patience: 20
+early_stopping_monitor: val_auprc
 seed: 1337
 
 inference_input: null

@@ -17,6 +17,54 @@ if not hasattr(keras.optimizers, "Adam") and hasattr(keras.optimizers, "adam_v2"
     keras.optimizers.Adam = keras.optimizers.adam_v2.Adam
 
 
+def average_precision(labels, scores):
+    labels = np.asarray(labels).astype(int)
+    scores = np.asarray(scores).astype(float)
+    if labels.size == 0 or np.sum(labels) == 0:
+        return 0.0
+    order = np.argsort(-scores, kind="mergesort")
+    sorted_labels = labels[order]
+    precision = np.cumsum(sorted_labels) / (np.arange(sorted_labels.size) + 1)
+    return float(np.sum(precision * sorted_labels) / np.sum(sorted_labels))
+
+
+class ValidationAUPRCCallback(keras.callbacks.Callback):
+    def __init__(self, validation_data, positive_class_index):
+        super().__init__()
+        self.validation_data = validation_data
+        self.positive_class_index = positive_class_index
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs if logs is not None else {}
+        x_valid, y_valid = self.validation_data
+        predictions = self.model.predict(x_valid, verbose=0)
+        scores = predictions[:, self.positive_class_index] if predictions.ndim > 1 else predictions.ravel()
+        labels = np.argmax(y_valid, axis=1) == self.positive_class_index
+        logs["val_auprc"] = average_precision(labels, scores)
+        print(f" - val_auprc: {logs['val_auprc']:.4f}")
+
+
+def build_callbacks(early_stopping_patience, monitor, validation_data, positive_class_index):
+    callbacks = []
+    if early_stopping_patience is None:
+        return callbacks
+    if monitor == "val_auprc":
+        if validation_data is None:
+            raise ValueError("AUPRC early stopping requires explicit validation FASTA inputs")
+        callbacks.append(ValidationAUPRCCallback(validation_data, positive_class_index))
+    mode = "max" if monitor in {"val_auprc", "val_auc", "val_accuracy", "val_acc"} else "min"
+    callbacks.append(
+        keras.callbacks.EarlyStopping(
+            monitor=monitor,
+            patience=early_stopping_patience,
+            mode=mode,
+            restore_best_weights=True,
+            verbose=1,
+        )
+    )
+    return callbacks
+
+
 def require_tensorflow_gpu(device):
     if str(device).lower() == "cpu":
         raise SystemExit("DeepMir training requires a CUDA GPU; got --device cpu")
@@ -152,6 +200,8 @@ def main():
     parser.add_argument("--pretrain_epochs", type=int, default=40)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--validation_split", type=float, default=0.2)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_monitor", default="val_loss")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -194,6 +244,12 @@ def main():
         validation_data = (valid_x, valid_y)
         validation_split = 0.0
 
+    callbacks = build_callbacks(
+        args.early_stopping_patience,
+        args.early_stopping_monitor,
+        validation_data,
+        positive_class_index=1,
+    )
     model.fit(
         train_x,
         train_y,
@@ -201,6 +257,7 @@ def main():
         validation_split=validation_split,
         batch_size=args.batch_size,
         epochs=args.epochs,
+        callbacks=callbacks,
         shuffle=True,
     )
     model_path = os.path.join(args.output, "model.h5")
