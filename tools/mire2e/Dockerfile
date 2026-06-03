@@ -30,6 +30,8 @@ RUN pip install torch==2.0.1+cu118 --extra-index-url https://download.pytorch.or
 
 RUN pip install miRe2e
 
+RUN python -c 'import inspect; from pathlib import Path; import miRe2e.predictor as p; path = Path(inspect.getfile(p)); text = path.read_text(); path.write_text(text.replace("if epoch_max >= 30:", "if epoch_max >= 20:"))'
+
 RUN python -c "from miRe2e import MiRe2e; MiRe2e(pretrained='hsa'); MiRe2e(pretrained='animals'); print('Models downloaded')" && \
     chmod -R a+rX "$TORCH_HOME"
 

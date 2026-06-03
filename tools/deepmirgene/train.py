@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 import tensorflow as tf
+from keras.callbacks import Callback, EarlyStopping
 
 
 def require_tensorflow_gpu(device):
@@ -36,6 +37,54 @@ def split_examples(positives, negatives, validation_split, seed):
     return positives[:pos_cut], negatives[:neg_cut], positives[pos_cut:], negatives[neg_cut:]
 
 
+def average_precision(labels, scores):
+    labels = np.asarray(labels).astype(int)
+    scores = np.asarray(scores).astype(float)
+    if labels.size == 0 or np.sum(labels) == 0:
+        return 0.0
+    order = np.argsort(-scores, kind="mergesort")
+    sorted_labels = labels[order]
+    precision = np.cumsum(sorted_labels) / (np.arange(sorted_labels.size) + 1)
+    return float(np.sum(precision * sorted_labels) / np.sum(sorted_labels))
+
+
+class ValidationAUPRCCallback(Callback):
+    def __init__(self, validation_data, positive_class_index):
+        super().__init__()
+        self.validation_data = validation_data
+        self.positive_class_index = positive_class_index
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs if logs is not None else {}
+        x_valid, y_valid = self.validation_data
+        predictions = self.model.predict(x_valid, verbose=0)
+        scores = predictions[:, self.positive_class_index] if predictions.ndim > 1 else predictions.ravel()
+        labels = np.argmax(y_valid, axis=1) == self.positive_class_index
+        logs["val_auprc"] = average_precision(labels, scores)
+        print(f" - val_auprc: {logs['val_auprc']:.4f}")
+
+
+def build_callbacks(early_stopping_patience, monitor, validation_data, positive_class_index):
+    callbacks = []
+    if early_stopping_patience is None:
+        return callbacks
+    if monitor == "val_auprc":
+        if validation_data is None:
+            raise ValueError("AUPRC early stopping requires explicit validation FASTA inputs")
+        callbacks.append(ValidationAUPRCCallback(validation_data, positive_class_index))
+    mode = "max" if monitor in {"val_auprc", "val_auc", "val_accuracy", "val_acc"} else "min"
+    callbacks.append(
+        EarlyStopping(
+            monitor=monitor,
+            patience=early_stopping_patience,
+            mode=mode,
+            restore_best_weights=True,
+            verbose=1,
+        )
+    )
+    return callbacks
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train a deepMiRGene model.")
     parser.add_argument("--positive_fasta", required=True)
@@ -46,6 +95,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--validation_split", type=float, default=0.2)
+    parser.add_argument("--early_stopping_patience", type=int, default=None)
+    parser.add_argument("--early_stopping_monitor", default="val_loss")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=1337)
     args = parser.parse_args()
@@ -90,6 +141,12 @@ def main():
         y_valid = to_categorical([0] * len(pos_valid) + [1] * len(neg_valid), num_classes=2)
         validation_data = (x_valid, y_valid)
 
+    callbacks = build_callbacks(
+        args.early_stopping_patience,
+        args.early_stopping_monitor,
+        validation_data,
+        positive_class_index=0,
+    )
     history = model.fit(
         x_train,
         y_train,
@@ -97,6 +154,7 @@ def main():
         verbose=1,
         batch_size=args.batch_size,
         validation_data=validation_data,
+        callbacks=callbacks,
     )
     if validation_data:
         predictions = model.predict(validation_data[0], verbose=0)

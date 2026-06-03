@@ -77,6 +77,49 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertIn("--positive_csv", args)
         self.assertNotIn("--positive_fasta", args)
 
+    def test_training_wrapper_passes_validation_and_early_stopping_args(self):
+        pos_fa = self.touch("positive.fa")
+        neg_fa = self.touch("negative.fa")
+        valid_pos_fa = self.touch("validation_positive.fa")
+        valid_neg_fa = self.touch("validation_negative.fa")
+        output_dir = os.path.join(self.repo_root, "results", "training", "dummy", "unit")
+
+        mounts = {}
+        args = self.train.build_tool_args(
+            "mirdnn",
+            self.repo_root,
+            {
+                "positive_fasta": pos_fa,
+                "negative_fasta": neg_fa,
+                "validation_positive_fasta": valid_pos_fa,
+                "validation_negative_fasta": valid_neg_fa,
+                "early_stopping_patience": 20,
+            },
+            output_dir,
+            mounts,
+        )
+
+        self.assertIn("--validation_positive_fasta", args)
+        self.assertIn("--validation_negative_fasta", args)
+        self.assertIn("--early_stopping_patience", args)
+        self.assertEqual(args[args.index("--early_stopping_patience") + 1], "20")
+
+        args = self.train.build_tool_args(
+            "deepmir",
+            self.repo_root,
+            {
+                "positive_fasta": pos_fa,
+                "negative_fasta": neg_fa,
+                "early_stopping_patience": 20,
+                "early_stopping_monitor": "val_auprc",
+            },
+            output_dir,
+            {},
+        )
+
+        self.assertIn("--early_stopping_monitor", args)
+        self.assertEqual(args[args.index("--early_stopping_monitor") + 1], "val_auprc")
+
     def test_external_output_dir_is_writable_mount(self):
         pos_fa = self.touch("positive.fa")
         neg_fa = self.touch("negative.fa")

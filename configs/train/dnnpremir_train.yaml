@@ -17,6 +17,8 @@ architecture: cnn
 batch_size: 200
 epochs: 600
 validation_split: 0.2
+early_stopping_patience: 20
+early_stopping_monitor: val_auprc
 seed: 42
 
 # dnnPreMiR inference consumes FASTA, so set this to the file you want the
