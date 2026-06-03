@@ -7,13 +7,14 @@ VALIDATOR="${ROOT_DIR}/benchmark/train_data/validate_bed_genome.py"
 NORMALIZER="${ROOT_DIR}/benchmark/train_data/normalize_bed_chroms.py"
 
 AUTO_CODES=(
-  hsa mmu cpo ocu eca mdo bta gga tgu aca cpi xtr xla lch dre cmi tni cin dme cel
+  hsa mmu cfa cpo ocu eca mdo bta gga tgu aca cpi xtr lch dre cmi tni cin dme cel
 )
 
 species_name() {
     case "$1" in
         hsa) echo "Human (Homo sapiens)" ;;
         mmu) echo "Mouse (Mus musculus)" ;;
+        cfa) echo "Dog (Canis familiaris)" ;;
         cpo) echo "Guinea pig (Cavia porcellus)" ;;
         ocu) echo "Rabbit (Oryctolagus cuniculus)" ;;
         eca) echo "Horse (Equus caballus)" ;;
@@ -24,7 +25,6 @@ species_name() {
         aca) echo "Anole lizard (Anolis carolinensis)" ;;
         cpi) echo "Painted turtle (Chrysemys picta bellii)" ;;
         xtr) echo "Xenopus tropicalis" ;;
-        xla) echo "Xenopus laevis" ;;
         lch) echo "Coelacanth (Latimeria chalumnae)" ;;
         dre) echo "Zebrafish (Danio rerio)" ;;
         cmi) echo "Elephant shark (Callorhinchus milii)" ;;
@@ -38,7 +38,32 @@ species_name() {
 
 mkdir -p "$OUT_ROOT"
 PANEL_TSV="${OUT_ROOT}/panel.tsv"
+OLD_PANEL_TSV=""
+if [ -s "$PANEL_TSV" ]; then
+    OLD_PANEL_TSV="${PANEL_TSV}.previous"
+    mv "$PANEL_TSV" "$OLD_PANEL_TSV"
+fi
 printf "code\tspecies\tstatus\tgenome\tbed\tvalidation\tbed_rows\tmatched_rows\tdropped_rows\n" > "$PANEL_TSV"
+
+reuse_panel_row() {
+    local code="$1"
+    local row genome bed validation
+    if [ -z "$OLD_PANEL_TSV" ]; then
+        return 1
+    fi
+    row="$(awk -F'\t' -v code="$code" 'NR > 1 && $1 == code && $3 == "auto" {print; exit}' "$OLD_PANEL_TSV")"
+    if [ -z "$row" ]; then
+        return 1
+    fi
+    genome="$(printf "%s\n" "$row" | awk -F'\t' '{print $4}')"
+    bed="$(printf "%s\n" "$row" | awk -F'\t' '{print $5}')"
+    validation="$(printf "%s\n" "$row" | awk -F'\t' '{print $6}')"
+    if [ -s "$genome" ] && [ -s "$bed" ] && [ -s "$validation" ]; then
+        printf "%s\n" "$row" >> "$PANEL_TSV"
+        return 0
+    fi
+    return 1
+}
 
 echo "Downloading auto-supported diverse panel species..."
 success_count=0
@@ -46,6 +71,11 @@ failed_count=0
 for code in "${AUTO_CODES[@]}"; do
     out_dir="${OUT_ROOT}/${code}"
     echo "### ${code} $(species_name "$code")"
+    if reuse_panel_row "$code"; then
+        success_count=$((success_count + 1))
+        echo "  status: auto (reused)"
+        continue
+    fi
     if ! "${ROOT_DIR}/benchmark/download/download_species.sh" "$code" "$out_dir" all; then
         validation="${out_dir}/download_error.txt"
         mkdir -p "$out_dir"

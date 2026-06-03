@@ -13,6 +13,7 @@ Supported species:
 | `hsa` | human | `hg38` | available |
 | `mmu` | mouse | `mm39` | available |
 | `rno` | rat | `rn7` | available |
+| `cfa` | dog | `canFam3` | available |
 | `cpo` | guinea pig | `cavPor3` | available |
 | `ocu` | rabbit | `oryCun2` | available |
 | `eca` | horse | `equCab3` | available |
@@ -70,8 +71,8 @@ species, normalizes BED contig names to the downloaded genome FASTA headers,
 and runs BED-vs-genome validation:
 
 ```text
-hsa, mmu, cpo, ocu, eca, mdo, bta, gga, tgu, aca,
-cpi, xtr, xla, lch, dre, cmi, tni, cin, dme, cel
+hsa, mmu, cfa, cpo, ocu, eca, mdo, bta, gga, tgu,
+aca, cpi, xtr, lch, dre, cmi, tni, cin, dme, cel
 ```
 
 These species have MirGeneDB BEDs and UCSC genome FASTA downloads that validate
