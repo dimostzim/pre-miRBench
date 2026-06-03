@@ -70,6 +70,7 @@ parser.add_argument('--genome', required=True, help='Genome FASTA (soft-masked)'
 parser.add_argument('--window', type=int, default=200, help='Window size (default: 200)')
 parser.add_argument('--max-repeat-frac', type=float, default=0.1)
 parser.add_argument('--output', required=True)
+parser.add_argument('--stats-output', default=None)
 parser.add_argument('--cpus', type=int, default=8)
 parser.add_argument('--chr', dest='chromosomes', default=None,
                     help='Comma-separated chromosomes to keep (default: all)')
@@ -158,3 +159,14 @@ with open(args.output, 'w', newline='') as f:
         written += 1
 
 print(f'{written} positives -> {args.output}')
+
+if args.stats_output:
+    with open(args.stats_output, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['metric', 'value'])
+        writer.writerow(['bed_pre_entries', len(mirnas)])
+        writer.writerow(['positives_after_filters', len(records)])
+        writer.writerow(['positives_written', written])
+        writer.writerow(['skipped_chr_missing', skipped_missing])
+        writer.writerow(['skipped_boundary', skipped_boundary])
+        writer.writerow(['skipped_repeat', skipped_repeat])

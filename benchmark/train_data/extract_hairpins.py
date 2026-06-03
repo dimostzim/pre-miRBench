@@ -177,6 +177,7 @@ def parse_args():
     parser.add_argument("--genome", required=True)
     parser.add_argument("--bed", required=True, help="Known miRNA BED used as an exclusion mask.")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--stats-output", default=None)
     parser.add_argument("--window", type=int, default=200)
     parser.add_argument("--step", type=int, default=50)
     parser.add_argument("--chr", dest="chromosomes", default=None, help="Comma-separated chromosomes to scan.")
@@ -301,6 +302,16 @@ def main():
     if chromosome_filter:
         print(f"chromosomes skipped: {skipped_chrom}")
     print(f"output: {args.output}")
+
+    if args.stats_output:
+        with open(args.stats_output, "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["metric", "value"])
+            writer.writerow(["folded_candidate_windows", folded])
+            writer.writerow(["hairpin_like_negatives_kept", kept])
+            writer.writerow(["skipped_overlap", skipped_overlap])
+            writer.writerow(["skipped_repeat_or_n", skipped_repeat])
+            writer.writerow(["chromosomes_skipped", skipped_chrom])
 
 
 if __name__ == "__main__":

@@ -56,6 +56,16 @@ def read_csv(path):
         return list(csv.DictReader(handle, delimiter="\t" if str(path).endswith(".tsv") else ","))
 
 
+def read_stats(path):
+    if not Path(path).exists():
+        return {}
+    stats = {}
+    with open(path, newline="") as handle:
+        for row in csv.DictReader(handle):
+            stats[row["metric"]] = row["value"]
+    return stats
+
+
 def write_csv(path, rows, fieldnames=FIELDNAMES):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", newline="") as handle:
@@ -89,7 +99,16 @@ def load_panel(path, species_filter):
             genome = str(find_single_file(Path(path).parent / row["code"], ".fa"))
         if not bed:
             bed = str(Path(path).parent / row["code"] / f"{row['code']}-precursors-no-v2.bed")
-        output.append({"code": row["code"], "genome": genome, "bed": bed})
+        output.append(
+            {
+                "code": row["code"],
+                "genome": genome,
+                "bed": bed,
+                "bed_rows": row.get("bed_rows", ""),
+                "matched_rows": row.get("matched_rows", ""),
+                "dropped_rows": row.get("dropped_rows", ""),
+            }
+        )
     if not output:
         raise SystemExit(f"No auto-download species found in {path}")
     return output
@@ -242,6 +261,19 @@ def write_split_summary(path, rows):
         "species",
         "test_chrom",
         "valid_chrom",
+        "bed_rows",
+        "bed_matched_rows",
+        "bed_dropped_rows",
+        "bed_pre_entries",
+        "positives_after_filters",
+        "positives_written",
+        "positive_chr_missing",
+        "positive_boundary_filtered",
+        "positive_repeat_filtered",
+        "negative_windows_folded",
+        "negative_hairpin_like_kept",
+        "negative_overlap_skipped",
+        "negative_repeat_or_n_skipped",
         "positives",
         "negatives",
         "train_pos",
@@ -314,7 +346,9 @@ def main():
         prefixed_genome = species_work / "genome.prefixed.fa"
         prefixed_bed = species_work / "precursors.prefixed.bed"
         positives_csv = species_work / "positives.csv"
+        positives_stats_csv = species_work / "positives.stats.csv"
         pool_csv = species_work / "hairpin_pool.csv"
+        pool_stats_csv = species_work / "hairpin_pool.stats.csv"
         hard_csv = species_work / "hard_negatives.csv"
         scores_csv = species_work / "hard_negative_scores.csv"
 
@@ -349,6 +383,8 @@ def main():
                 args.max_repeat_frac,
                 "--output",
                 positives_csv,
+                "--stats-output",
+                positives_stats_csv,
                 "--cpus",
                 args.cpus,
             ],
@@ -378,6 +414,8 @@ def main():
             args.max_loop,
             "--output",
             pool_csv,
+            "--stats-output",
+            pool_stats_csv,
             "--cpus",
             args.cpus,
         ]
@@ -414,6 +452,8 @@ def main():
         )
 
         positives = read_csv(positives_csv)
+        positives_stats = read_stats(positives_stats_csv)
+        pool_stats = read_stats(pool_stats_csv)
         hard_negatives = read_csv(hard_csv)
         scored_negatives = read_csv(scores_csv)
         negative_pool = unique_rows_by_window(hard_negatives + scored_negatives)
@@ -462,6 +502,19 @@ def main():
                 "species": species,
                 "test_chrom": test_chrom,
                 "valid_chrom": valid_chrom,
+                "bed_rows": species_row.get("bed_rows", ""),
+                "bed_matched_rows": species_row.get("matched_rows", ""),
+                "bed_dropped_rows": species_row.get("dropped_rows", ""),
+                "bed_pre_entries": positives_stats.get("bed_pre_entries", ""),
+                "positives_after_filters": positives_stats.get("positives_after_filters", ""),
+                "positives_written": positives_stats.get("positives_written", ""),
+                "positive_chr_missing": positives_stats.get("skipped_chr_missing", ""),
+                "positive_boundary_filtered": positives_stats.get("skipped_boundary", ""),
+                "positive_repeat_filtered": positives_stats.get("skipped_repeat", ""),
+                "negative_windows_folded": pool_stats.get("folded_candidate_windows", ""),
+                "negative_hairpin_like_kept": pool_stats.get("hairpin_like_negatives_kept", ""),
+                "negative_overlap_skipped": pool_stats.get("skipped_overlap", ""),
+                "negative_repeat_or_n_skipped": pool_stats.get("skipped_repeat_or_n", ""),
                 "positives": sum(1 for row in species_rows if row["label"] == "1"),
                 "negatives": sum(1 for row in species_rows if row["label"] == "0"),
                 "train_pos": counts[("train", "1")],
