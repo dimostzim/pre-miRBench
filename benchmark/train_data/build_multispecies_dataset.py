@@ -300,6 +300,11 @@ def parse_args():
     parser.add_argument("--window", type=int, default=200)
     parser.add_argument("--step", type=int, default=50)
     parser.add_argument("--max-negative-windows-per-species", type=int, default=50000)
+    parser.add_argument(
+        "--sequential-negative-scan",
+        action="store_true",
+        help="Scan negative windows in FASTA order. Default balances capped scans across BED-positive chromosomes.",
+    )
     parser.add_argument("--max-repeat-frac", type=float, default=0.1)
     parser.add_argument("--min-mfe", type=float, default=-10.0)
     parser.add_argument("--min-paired-frac", type=float, default=0.40)
@@ -421,6 +426,8 @@ def main():
         ]
         if args.max_negative_windows_per_species:
             hairpin_cmd.extend(["--max-windows", args.max_negative_windows_per_species])
+        if not args.sequential_negative_scan:
+            hairpin_cmd.append("--balance-bed-chroms")
         run(hairpin_cmd, pool_csv if args.reuse_existing else None)
 
         run(
