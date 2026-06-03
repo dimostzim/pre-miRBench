@@ -13,6 +13,21 @@ Supported species:
 | `hsa` | human | `hg38` | available |
 | `mmu` | mouse | `mm39` | available |
 | `rno` | rat | `rn7` | available |
+| `cpo` | guinea pig | `cavPor3` | available |
+| `ocu` | rabbit | `oryCun2` | available |
+| `eca` | horse | `equCab3` | available |
+| `mdo` | opossum | `monDom5` | available |
+| `bta` | cow | `bosTau9` | available |
+| `gga` | chicken | `galGal6` | available |
+| `tgu` | zebra finch | `taeGut2` | available |
+| `aca` | anole lizard | `anoCar2` | available |
+| `cpi` | painted turtle | `chrPic1` | available |
+| `xtr` | X. tropicalis | `xenTro10` | available |
+| `xla` | X. laevis | `xenLae2` | available |
+| `lch` | coelacanth | `latCha1` | available |
+| `cmi` | elephant shark | `calMil1` | available |
+| `tni` | Tetraodon | `tetNig2` | available |
+| `cin` | Ciona | `ci3` | available |
 | `dme` | fruit fly | `dm6` | available |
 | `dre` | zebrafish | `danRer11` | available |
 | `cel` | C. elegans | `ce11` | available |
@@ -50,16 +65,18 @@ Default output root: `data/train/raw/diverse20`.
 The panel is intended to avoid overloading the benchmark with closely related
 species. It includes broad vertebrate and invertebrate coverage.
 
-The script downloads genome FASTA, MirGeneDB BED, and runs BED-vs-genome
-validation for all 20 panel species:
+The script downloads genome FASTA and MirGeneDB BED files for all 20 panel
+species, normalizes BED contig names to the downloaded genome FASTA headers,
+and runs BED-vs-genome validation:
 
 ```text
-hsa, mmu, mdo, oan, bta, gga, ami, aca, cpi, xtr,
-dre, cmi, gmo, tni, bfl, cin, dme, aga, cel, spu
+hsa, mmu, cpo, ocu, eca, mdo, bta, gga, tgu, aca,
+cpi, xtr, xla, lch, dre, cmi, tni, cin, dme, cel
 ```
 
-These species have MirGeneDB BEDs and straightforward UCSC genome FASTA
-downloads. The panel deliberately avoids stacking closely related primates.
+These species have MirGeneDB BEDs and UCSC genome FASTA downloads that validate
+after BED contig-name normalization. The panel deliberately avoids stacking
+closely related primates.
 
 The panel writes:
 
@@ -67,14 +84,22 @@ The panel writes:
 <output_root>/panel.tsv
 <output_root>/<species>/<ucsc_build>.fa
 <output_root>/<species>/<species>-precursors-no-v2.bed
+<output_root>/<species>/<species>-precursors-no-v2.normalized.bed
+<output_root>/<species>/bed_chrom_normalization.txt
 <output_root>/<species>/bed_genome_validation.txt
 ```
+
+`panel.tsv` points at the normalized BED. The normalization handles common
+UCSC differences such as `1` -> `chr1` and `X` -> `chrX`. Contigs that still
+cannot be matched are dropped and reported in `bed_chrom_normalization.txt`.
+The manifest also records `bed_rows`, `matched_rows`, and `dropped_rows` for
+each species.
 
 You can rerun validation manually:
 
 ```bash
 python benchmark/train_data/validate_bed_genome.py \
-  --bed data/train/raw/diverse20/hsa/hsa-precursors-no-v2.bed \
+  --bed data/train/raw/diverse20/hsa/hsa-precursors-no-v2.normalized.bed \
   --genome data/train/raw/diverse20/hsa/hg38.fa
 ```
 

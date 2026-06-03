@@ -4,54 +4,97 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT_ROOT="${1:-data/train/raw/diverse20}"
 VALIDATOR="${ROOT_DIR}/benchmark/train_data/validate_bed_genome.py"
+NORMALIZER="${ROOT_DIR}/benchmark/train_data/normalize_bed_chroms.py"
 
 AUTO_CODES=(
-  hsa mmu mdo oan bta gga ami aca cpi xtr dre cmi gmo tni bfl cin dme aga cel spu
+  hsa mmu cpo ocu eca mdo bta gga tgu aca cpi xtr xla lch dre cmi tni cin dme cel
 )
 
 species_name() {
     case "$1" in
         hsa) echo "Human (Homo sapiens)" ;;
         mmu) echo "Mouse (Mus musculus)" ;;
+        cpo) echo "Guinea pig (Cavia porcellus)" ;;
+        ocu) echo "Rabbit (Oryctolagus cuniculus)" ;;
+        eca) echo "Horse (Equus caballus)" ;;
         mdo) echo "Opossum (Monodelphis domestica)" ;;
-        oan) echo "Platypus (Ornithorhynchus anatinus)" ;;
         bta) echo "Cow (Bos taurus)" ;;
         gga) echo "Chicken (Gallus gallus)" ;;
-        ami) echo "Alligator (Alligator mississippiensis)" ;;
+        tgu) echo "Zebra finch (Taeniopygia guttata)" ;;
         aca) echo "Anole lizard (Anolis carolinensis)" ;;
         cpi) echo "Painted turtle (Chrysemys picta bellii)" ;;
         xtr) echo "Xenopus tropicalis" ;;
+        xla) echo "Xenopus laevis" ;;
+        lch) echo "Coelacanth (Latimeria chalumnae)" ;;
         dre) echo "Zebrafish (Danio rerio)" ;;
         cmi) echo "Elephant shark (Callorhinchus milii)" ;;
-        gmo) echo "Atlantic cod (Gadus morhua)" ;;
         tni) echo "Tetraodon (Tetraodon nigroviridis)" ;;
-        bfl) echo "Amphioxus (Branchiostoma floridae)" ;;
         cin) echo "Ciona intestinalis" ;;
         dme) echo "Drosophila melanogaster" ;;
-        aga) echo "Anopheles gambiae" ;;
         cel) echo "C. elegans (Caenorhabditis elegans)" ;;
-        spu) echo "Sea urchin (Strongylocentrotus purpuratus)" ;;
         *) echo "$1" ;;
     esac
 }
 
 mkdir -p "$OUT_ROOT"
 PANEL_TSV="${OUT_ROOT}/panel.tsv"
-printf "code\tspecies\tstatus\tgenome\tbed\tvalidation\n" > "$PANEL_TSV"
+printf "code\tspecies\tstatus\tgenome\tbed\tvalidation\tbed_rows\tmatched_rows\tdropped_rows\n" > "$PANEL_TSV"
 
 echo "Downloading auto-supported diverse panel species..."
+success_count=0
+failed_count=0
 for code in "${AUTO_CODES[@]}"; do
     out_dir="${OUT_ROOT}/${code}"
     echo "### ${code} $(species_name "$code")"
-    "${ROOT_DIR}/benchmark/download/download_species.sh" "$code" "$out_dir" all
+    if ! "${ROOT_DIR}/benchmark/download/download_species.sh" "$code" "$out_dir" all; then
+        validation="${out_dir}/download_error.txt"
+        mkdir -p "$out_dir"
+        echo "download failed" > "$validation"
+        printf "%s\t%s\tdownload_failed\t\t\t%s\t\t\t\n" "$code" "$(species_name "$code")" "$validation" >> "$PANEL_TSV"
+        failed_count=$((failed_count + 1))
+        echo "  status: download_failed"
+        continue
+    fi
 
     genome="$(find "$out_dir" -maxdepth 1 -name "*.fa" | sort | head -n 1)"
-    bed="${out_dir}/${code}-precursors-no-v2.bed"
+    raw_bed="${out_dir}/${code}-precursors-no-v2.bed"
+    bed="${out_dir}/${code}-precursors-no-v2.normalized.bed"
+    alias="${out_dir}/chromAlias.txt"
+    normalize_report="${out_dir}/bed_chrom_normalization.txt"
     validation="${out_dir}/bed_genome_validation.txt"
-    python "$VALIDATOR" --bed "$bed" --genome "$genome" > "$validation"
-    printf "%s\t%s\tauto\t%s\t%s\t%s\n" "$code" "$(species_name "$code")" "$genome" "$bed" "$validation" >> "$PANEL_TSV"
+    normalize_cmd=(python "$NORMALIZER" --bed "$raw_bed" --genome "$genome" --output "$bed" --report "$normalize_report")
+    if [ -s "$alias" ]; then
+        normalize_cmd+=(--alias "$alias")
+    fi
+    if ! "${normalize_cmd[@]}"; then
+        bed_rows="$(awk -F': ' '/^bed_rows:/ {print $2}' "$normalize_report" 2>/dev/null || true)"
+        matched_rows="$(awk -F': ' '/^matched_rows:/ {print $2}' "$normalize_report" 2>/dev/null || true)"
+        dropped_rows="$(awk -F': ' '/^dropped_rows:/ {print $2}' "$normalize_report" 2>/dev/null || true)"
+        printf "%s\t%s\tnormalization_failed\t%s\t%s\t%s\t%s\t%s\t%s\n" "$code" "$(species_name "$code")" "$genome" "$raw_bed" "$normalize_report" "$bed_rows" "$matched_rows" "$dropped_rows" >> "$PANEL_TSV"
+        failed_count=$((failed_count + 1))
+        echo "  status: normalization_failed"
+        echo "  normalization details: $normalize_report"
+        continue
+    fi
+    bed_rows="$(awk -F': ' '/^bed_rows:/ {print $2}' "$normalize_report")"
+    matched_rows="$(awk -F': ' '/^matched_rows:/ {print $2}' "$normalize_report")"
+    dropped_rows="$(awk -F': ' '/^dropped_rows:/ {print $2}' "$normalize_report")"
+    if python "$VALIDATOR" --bed "$bed" --genome "$genome" > "$validation"; then
+        printf "%s\t%s\tauto\t%s\t%s\t%s\t%s\t%s\t%s\n" "$code" "$(species_name "$code")" "$genome" "$bed" "$validation" "$bed_rows" "$matched_rows" "$dropped_rows" >> "$PANEL_TSV"
+        success_count=$((success_count + 1))
+        echo "  status: auto"
+    else
+        printf "%s\t%s\tvalidation_failed\t%s\t%s\t%s\t%s\t%s\t%s\n" "$code" "$(species_name "$code")" "$genome" "$bed" "$validation" "$bed_rows" "$matched_rows" "$dropped_rows" >> "$PANEL_TSV"
+        failed_count=$((failed_count + 1))
+        echo "  status: validation_failed"
+        echo "  validation details: $validation"
+    fi
 done
 
 echo ""
 echo "panel manifest: $PANEL_TSV"
-echo "all panel species include automatic UCSC genome download and BED-vs-genome validation"
+echo "auto species: $success_count"
+echo "failed species: $failed_count"
+if [ "$failed_count" -gt 0 ]; then
+    echo "failed rows are kept in panel.tsv but skipped by the dataset builder"
+fi
