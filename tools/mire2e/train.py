@@ -2,6 +2,7 @@
 import argparse
 import os
 import random
+import re
 import subprocess
 import sys
 
@@ -49,6 +50,13 @@ def read_fasta(path):
         yield name, "".join(parts)
 
 
+def parse_rnafold_structure_line(name, line):
+    match = re.match(r"^(?P<structure>[().]+)\s+\(\s*(?P<mfe>[-+]?\d+(?:\.\d+)?)\s*\)", line)
+    if not match:
+        raise ValueError(f"RNAfold produced unexpected structure/MFE line for {name}: {line}")
+    return match.group("structure"), f"({match.group('mfe')})"
+
+
 def fold_sequence(name, sequence):
     rnafold = os.path.join(os.path.dirname(sys.executable), "RNAfold")
     clean_sequence = sequence.upper().replace("T", "U")
@@ -63,8 +71,8 @@ def fold_sequence(name, sequence):
     lines = [line.strip() for line in process.stdout.splitlines() if line.strip()]
     if len(lines) < 3:
         raise ValueError(f"RNAfold produced unexpected output for {name}: {process.stdout}")
-    structure_parts = lines[2].split()
-    return lines[1], structure_parts[0], structure_parts[1]
+    structure, mfe = parse_rnafold_structure_line(name, lines[2])
+    return lines[1], structure, mfe
 
 
 def write_fold_training_fasta(input_fastas, output_path):
