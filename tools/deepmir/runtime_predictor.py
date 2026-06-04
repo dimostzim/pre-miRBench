@@ -124,17 +124,19 @@ def compute_predictions(data_directory, seq_fold_dict):
     names = np.load(data_directory + "/names.npz")["arr_0"]
 
     model = load_model(MODEL_FILENAME)
-    predictions = np.argmax(model.predict(images), axis=1)
+    probabilities = model.predict(images)
+    predictions = np.argmax(probabilities, axis=1)
 
     results_filename = data_directory + "/results.csv"
     with open(results_filename, "w") as results:
-        results.write("hairpin,sequence,fold,label\n")
+        results.write("hairpin,sequence,fold,label,score\n")
 
-        for name, prediction in zip(names.tolist(), predictions.tolist()):
+        for name, prediction, probability in zip(names.tolist(), predictions.tolist(), probabilities.tolist()):
             name = name.decode("utf-8")
             label = "pre-miRNA" if prediction == 1 else "not pre-miRNA"
             seq_fold = seq_fold_dict[name]
-            results.write("{},{},{},{}\n".format(name, seq_fold[0], seq_fold[1], label))
+            score = probability[1] if isinstance(probability, list) else probability
+            results.write("{},{},{},{},{:.8f}\n".format(name, seq_fold[0], seq_fold[1], label, score))
 
     print("Prediction results were written to: {}".format(results_filename))
 
@@ -142,7 +144,7 @@ def compute_predictions(data_directory, seq_fold_dict):
 def write_empty_results(data_directory):
     results_filename = data_directory + "/results.csv"
     with open(results_filename, "w") as results:
-        results.write("hairpin,sequence,fold,label\n")
+        results.write("hairpin,sequence,fold,label,score\n")
     print("No valid DeepMir hairpin images were generated; wrote empty results to: {}".format(results_filename))
 
 

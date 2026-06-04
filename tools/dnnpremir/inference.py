@@ -1,9 +1,29 @@
 #!/usr/bin/env python
 import argparse
 import os
-import shutil
-import subprocess
 import sys
+
+import numpy as np
+from keras.models import load_model
+
+
+def read_fasta(path):
+    name = None
+    parts = []
+    with open(path) as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if name is not None:
+                    yield name, "".join(parts)
+                name = line[1:].split()[0]
+                parts = []
+            else:
+                parts.append(line)
+    if name is not None:
+        yield name, "".join(parts)
 
 
 def main():
@@ -21,32 +41,42 @@ def main():
     os.makedirs(args.output, exist_ok=True)
 
     output_file = os.path.join(os.path.abspath(args.output), "predictions.txt")
-
-    # the original script expects to be run from its own directory
-    # because it uses relative paths like ./bin/RNAfold and src/CNN/CNN_model.h5
-    cmd = [
-        sys.executable,
-        "isPreMiR.py",
-        "-i", os.path.abspath(args.input),
-        "-o", output_file
-    ]
-
-    target_model_path = os.path.join(dnnpremir_src, "src", "CNN", "CNN_model.h5")
-    restore_backup = None
+    input_path = os.path.abspath(args.input)
     if args.model:
-        provided_model = os.path.abspath(args.model)
-        if not os.path.isfile(provided_model):
-            raise FileNotFoundError(f"dnnPreMiR model not found: {provided_model}")
-        if os.path.exists(target_model_path):
-            restore_backup = target_model_path + ".bak"
-            shutil.copy2(target_model_path, restore_backup)
-        shutil.copy2(provided_model, target_model_path)
+        model_path = os.path.abspath(args.model)
+    else:
+        model_path = os.path.join(dnnpremir_src, "src", "CNN", "CNN_model.h5")
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"dnnPreMiR model not found: {model_path}")
 
+    sys.path.insert(0, dnnpremir_src)
+    old_cwd = os.getcwd()
+    os.chdir(dnnpremir_src)
     try:
-        subprocess.check_call(cmd, cwd=dnnpremir_src)
+        import isPreMiR
+
+        os.makedirs("./temp", exist_ok=True)
+        records = list(read_fasta(input_path))
+        vectors = []
+        for name, sequence in records:
+            with open("./temp/temp_sequence.fa", "w") as handle:
+                handle.write(f">{name}\n{sequence}\n")
+            seq_struct = isPreMiR.second_struct_predict(sequence)
+            vectors.append(isPreMiR.transform_seq_struct(seq_struct))
+        if not records:
+            raise ValueError(f"No FASTA records found in {input_path}")
+
+        model = load_model(model_path)
+        predictions = model.predict(np.array(vectors))
     finally:
-        if restore_backup and os.path.exists(restore_backup):
-            shutil.move(restore_backup, target_model_path)
+        os.chdir(old_cwd)
+
+    with open(output_file, "w") as handle:
+        handle.write("record_id\tscore\tpredicted_label\n")
+        for (record_id, _), prediction in zip(records, predictions.tolist()):
+            score = float(prediction[0])
+            predicted_label = 1 if score >= float(prediction[1]) else 0
+            handle.write(f"{record_id}\t{score:.8f}\t{predicted_label}\n")
 
 
 if __name__ == "__main__":

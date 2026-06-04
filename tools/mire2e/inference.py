@@ -59,6 +59,7 @@ def main():
             )
             for i, idx in enumerate(index):
                 predictions.append({
+                    "record_id": record.id,
                     "window": idx,
                     "score_5_3": float(scores_5_3[i]),
                     "score_3_5": float(scores_3_5[i]),

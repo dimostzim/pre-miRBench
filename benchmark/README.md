@@ -90,3 +90,26 @@ done
 ```
 
 The training wrapper passes `--gpus all` to Docker and uses CUDA by default.
+
+## Evaluate Trained Tools
+
+After training writes `inference_config.yaml` files under the training root,
+evaluate the same trained models on the held-out chromosome and held-out species
+splits:
+
+```bash
+python benchmark/evaluate.py \
+  --dataset-dir data/train/diverse20 \
+  --training-root "$SCRATCH/pre-miRBench/training" \
+  --run-name diverse20_gpu_1to5 \
+  --output-dir "$SCRATCH/pre-miRBench/evaluation/diverse20_gpu_1to5"
+```
+
+This writes raw per-tool inference outputs plus:
+
+- `predictions.csv` - one labeled score per evaluated record
+- `metrics.csv` - aggregate metrics per tool and split
+- `metrics_by_species.csv` - the same metrics stratified by species
+
+The evaluator mounts the current wrapper scripts into Docker, so wrapper-only
+output fixes are picked up after `git pull` without rebuilding the images.
