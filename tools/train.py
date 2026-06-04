@@ -308,7 +308,8 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
             if key not in config or config.get(key) is None:
                 continue
             path = require_dir(repo_root, config, key) if expect_dir else require_file(repo_root, config, key)
-            cmd.extend([flag, container_path(repo_root, path, mounts)])
+            read_only = key not in {"genome", "consDir"}
+            cmd.extend([flag, container_path(repo_root, path, mounts, read_only=read_only)])
         for key, flag in (
             ("device", "--device"),
             ("classList", "--classList"),

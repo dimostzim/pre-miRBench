@@ -161,6 +161,33 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertIn(os.path.abspath(external_dir.name), mounts)
         self.assertTrue(mounts[os.path.abspath(external_dir.name)].endswith(":ro"))
 
+    def test_mustard_genome_mount_is_writable(self):
+        pos_bed = self.touch("positive.bed")
+        neg_bed = self.touch("negative.bed")
+        genome = self.touch("genome.fa")
+        cons_dir = os.path.join(self.temp_dir.name, "cons")
+        os.mkdir(cons_dir)
+        output_dir = os.path.join(self.repo_root, "results", "training", "dummy", "unit")
+
+        mounts = {}
+        self.train.build_tool_args(
+            "mustard",
+            self.repo_root,
+            {
+                "positiveIntervals": pos_bed,
+                "negativeIntervals": neg_bed,
+                "genome": genome,
+                "consDir": cons_dir,
+            },
+            output_dir,
+            mounts,
+        )
+
+        self.assertIn(os.path.abspath(genome), mounts)
+        self.assertFalse(mounts[os.path.abspath(genome)].endswith(":ro"))
+        self.assertIn(os.path.abspath(cons_dir), mounts)
+        self.assertFalse(mounts[os.path.abspath(cons_dir)].endswith(":ro"))
+
 
 if __name__ == "__main__":
     unittest.main()
