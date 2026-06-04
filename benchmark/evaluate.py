@@ -1,0 +1,635 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import gzip
+import importlib.util
+import json
+import math
+import os
+import shutil
+import subprocess
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+
+TOOLS = ("deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e", "mustard")
+FASTA_TOOLS = {"deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e"}
+DEFAULT_SPLITS = ("test_chrom", "test_species")
+
+
+def repo_root():
+    return Path(__file__).resolve().parents[1]
+
+
+def load_train_helpers(root):
+    module_path = root / "tools" / "train.py"
+    spec = importlib.util.spec_from_file_location("train_wrapper_helpers", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def parse_csv_list(value, allowed=None):
+    if not value or value == "all":
+        return list(allowed or [])
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    if allowed:
+        unknown = sorted(set(items) - set(allowed))
+        if unknown:
+            raise ValueError(f"Unsupported values: {', '.join(unknown)}")
+    return items
+
+
+def expand_path(path):
+    return Path(os.path.expandvars(os.path.expanduser(str(path)))).resolve()
+
+
+def config_host_path(root, value):
+    value = os.path.expandvars(os.path.expanduser(str(value)))
+    if os.path.isabs(value):
+        return os.path.abspath(value)
+    return os.path.abspath(root / value)
+
+
+def looks_like_path(value):
+    return isinstance(value, str) and (
+        "/" in value or "\\" in value or value.endswith((".fa", ".bed", ".h5", ".hdf5", ".pmt", ".pkl"))
+    )
+
+
+def require_config_path(root, config, key, expect_dir=False):
+    if not config.get(key):
+        raise ValueError(f"Missing required inference config field: {key}")
+    path = config_host_path(root, config[key])
+    exists = os.path.isdir(path) if expect_dir else os.path.isfile(path)
+    if not exists:
+        kind = "directory" if expect_dir else "file"
+        raise FileNotFoundError(f"Missing {key} {kind}: {path}")
+    return path
+
+
+def optional_path_or_literal(root, train_helpers, config, key, mounts, read_only=True):
+    value = config.get(key)
+    if not value:
+        return None
+    if looks_like_path(value):
+        path = config_host_path(root, value)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Missing {key} file: {path}")
+        return train_helpers.container_path(str(root), path, mounts, read_only=read_only)
+    return str(value)
+
+
+def read_fasta_records(path):
+    records = []
+    name = None
+    parts = []
+    with open(path) as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if name is not None:
+                    records.append((name, "".join(parts)))
+                name = line[1:].split()[0]
+                parts = []
+            else:
+                parts.append(line)
+    if name is not None:
+        records.append((name, "".join(parts)))
+    return records
+
+
+def read_bed_records(path):
+    records = []
+    with open(path) as handle:
+        for raw_line in handle:
+            if not raw_line.strip() or raw_line.startswith("#"):
+                continue
+            fields = raw_line.rstrip("\n").split("\t")
+            if len(fields) < 6:
+                raise ValueError(f"BED rows need at least 6 columns: {path}")
+            records.append((fields[3], raw_line.rstrip("\n")))
+    return records
+
+
+def write_fasta(path, records):
+    with open(path, "w") as handle:
+        for record_id, sequence in records:
+            handle.write(f">{record_id}\n")
+            for offset in range(0, len(sequence), 80):
+                handle.write(sequence[offset:offset + 80] + "\n")
+
+
+def write_bed(path, records):
+    with open(path, "w") as handle:
+        for _, line in records:
+            handle.write(line + "\n")
+
+
+def split_input_paths(dataset_dir, tool, split):
+    tool_dir = dataset_dir / "tool_inputs" / tool
+    suffix = "fa" if tool in FASTA_TOOLS else "bed"
+    return (
+        tool_dir / f"{split}_positive.{suffix}",
+        tool_dir / f"{split}_negative.{suffix}",
+    )
+
+
+def make_labeled_input(dataset_dir, eval_dir, tool, split):
+    positive_path, negative_path = split_input_paths(dataset_dir, tool, split)
+    if not positive_path.is_file() or not negative_path.is_file():
+        raise FileNotFoundError(f"Missing {tool} {split} input files under {positive_path.parent}")
+
+    input_dir = eval_dir / "inputs" / tool
+    input_dir.mkdir(parents=True, exist_ok=True)
+
+    if tool in FASTA_TOOLS:
+        positive_records = read_fasta_records(positive_path)
+        negative_records = read_fasta_records(negative_path)
+        input_path = input_dir / f"{split}.fa"
+        write_fasta(input_path, positive_records + negative_records)
+    else:
+        positive_records = read_bed_records(positive_path)
+        negative_records = read_bed_records(negative_path)
+        input_path = input_dir / f"{split}.bed"
+        write_bed(input_path, positive_records + negative_records)
+
+    labels = []
+    seen = set()
+    for label, records in ((1, positive_records), (0, negative_records)):
+        for record_id, _ in records:
+            if record_id in seen:
+                raise ValueError(f"Duplicate record_id in {tool} {split}: {record_id}")
+            seen.add(record_id)
+            labels.append({"record_id": record_id, "label": label})
+    if not labels:
+        raise ValueError(f"No records in {tool} {split} evaluation input")
+
+    labels_path = input_dir / f"{split}.labels.csv"
+    write_table(labels_path, labels, ["record_id", "label"])
+    return input_path, labels
+
+
+def write_table(path, rows, fieldnames):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts):
+    input_arg = train_helpers.container_path(str(root), input_path, mounts)
+    output_arg = train_helpers.container_path(str(root), output_dir, mounts, read_only=False)
+    args = [f"/opt/{tool}/inference.py"]
+
+    if tool == "mustard":
+        genome = require_config_path(root, config, "genome")
+        cons_dir = require_config_path(root, config, "consDir", expect_dir=True)
+        model = optional_path_or_literal(root, train_helpers, config, "model", mounts)
+        interm_dir = output_dir / "intermediate"
+        interm_arg = train_helpers.container_path(str(root), interm_dir, mounts, read_only=False)
+        args.extend(["--targetIntervals", input_arg])
+        args.extend(["--genome", train_helpers.container_path(str(root), genome, mounts, read_only=False)])
+        args.extend(["--consDir", train_helpers.container_path(str(root), cons_dir, mounts, read_only=False)])
+        args.extend(["--dir", output_arg])
+        args.extend(["--chromList", str(config.get("chromList", "all"))])
+        if model:
+            args.extend(["--model", model])
+        args.extend(["--classNum", str(config.get("classNum", 2))])
+        args.extend(["--modelType", str(config.get("modelType", "CNN"))])
+        args.extend(["--winSize", str(config.get("winSize", config.get("maxSize", 200)))])
+        args.extend(["--step", str(config.get("step", 5))])
+        args.extend(["--staticPredFlag", str(config.get("staticPredFlag", 1))])
+        args.extend(["--inputMode", str(config.get("inputMode", "sequence,RNAfold"))])
+        args.extend(["--threads", str(config.get("threads", 10))])
+        args.extend(["--modelDirName", str(config.get("modelDirName", "results"))])
+        args.extend(["--intermDir", interm_arg])
+        return args
+
+    args.extend(["--input", input_arg, "--output", output_arg])
+
+    model = optional_path_or_literal(root, train_helpers, config, "model", mounts)
+    if model:
+        args.extend(["--model", model])
+
+    if tool == "mire2e":
+        for key, flag in (
+            ("device", "--device"),
+            ("pretrained", "--pretrained"),
+            ("length", "--length"),
+            ("step", "--step"),
+            ("batch_size", "--batch_size"),
+        ):
+            if config.get(key) is not None:
+                args.extend([flag, str(config[key])])
+        for key, flag in (
+            ("structure_model", "--structure_model"),
+            ("mfe_model", "--mfe_model"),
+            ("predictor_model", "--predictor_model"),
+        ):
+            value = optional_path_or_literal(root, train_helpers, config, key, mounts)
+            if value:
+                args.extend([flag, value])
+    elif tool == "mirdnn":
+        for key, flag in (("seq_length", "--seq_length"), ("device", "--device"), ("batch_size", "--batch_size")):
+            if config.get(key) is not None:
+                args.extend([flag, str(config[key])])
+    elif tool == "dnnpremir" and config.get("seq_length") is not None:
+        args.extend(["--seq_length", str(config["seq_length"])])
+
+    return args
+
+
+def add_runtime_mounts(tool, root, eval_dir, split, cmd):
+    wrapper = root / "tools" / tool / "inference.py"
+    if wrapper.is_file():
+        cmd.extend(["-v", f"{wrapper}:/opt/{tool}/inference.py:ro"])
+
+    scratch_dir = eval_dir / "_runtime" / tool / split
+    if scratch_dir.exists():
+        shutil.rmtree(scratch_dir)
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+
+    if tool == "deepmir":
+        user_data = scratch_dir / "user_data"
+        user_data.mkdir(parents=True, exist_ok=True)
+        runtime_predictor = root / "tools" / "deepmir" / "runtime_predictor.py"
+        cmd.extend(["-v", f"{user_data}:/opt/deepmir/deepmir_src/user_data"])
+        cmd.extend(["-v", f"{runtime_predictor}:/opt/deepmir/deepmir_src/predictor.py:ro"])
+    elif tool == "dnnpremir":
+        temp_dir = scratch_dir / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        cmd.extend(["-v", f"{temp_dir}:/opt/dnnpremir/dnnpremir_src/temp"])
+
+
+def run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=False):
+    mounts = {}
+    tool_args = build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts)
+
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--gpus",
+        "all",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "-e",
+        "HOME=/tmp",
+        "-e",
+        "XDG_CACHE_HOME=/tmp/.cache",
+        "-v",
+        f"{root}:/work",
+    ]
+    for mount in mounts.values():
+        cmd.extend(["-v", mount])
+    add_runtime_mounts(tool, root, eval_dir, input_path.stem, cmd)
+    cmd.extend(["--entrypoint", "python", f"{tool}:latest"])
+    cmd.extend(tool_args)
+
+    if dry_run:
+        print(" ".join(cmd))
+        return
+    subprocess.check_call(cmd)
+
+
+def parse_deepmir(output_dir):
+    result_files = list(output_dir.glob("results.csv")) or list(output_dir.rglob("results.csv"))
+    if not result_files:
+        raise FileNotFoundError(f"No DeepMir results.csv found under {output_dir}")
+    scores = {}
+    with open(result_files[0], newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if not row.get("hairpin"):
+                continue
+            if row.get("score") not in (None, ""):
+                score = float(row["score"])
+            else:
+                score = 1.0 if row.get("label") == "pre-miRNA" else 0.0
+            scores[row["hairpin"]] = score
+    return scores
+
+
+def parse_record_score_table(path, labels):
+    with open(path) as handle:
+        first = handle.readline()
+        handle.seek(0)
+        if first.startswith("record_id\t"):
+            reader = csv.DictReader(handle, delimiter="\t")
+            return {row["record_id"]: float(row["score"]) for row in reader if row.get("record_id")}
+
+        lines = [line.strip() for line in handle if line.strip()]
+
+    expected_ids = [row["record_id"] for row in labels]
+    if all(line in {"0", "1"} for line in lines):
+        if len(lines) != len(expected_ids):
+            raise ValueError(f"{path} has {len(lines)} labels for {len(expected_ids)} input records")
+        return {record_id: 1.0 if int(value) == 0 else 0.0 for record_id, value in zip(expected_ids, lines)}
+
+    hard_labels = []
+    for line in lines:
+        if line in {"True", "False"} or line.endswith(" True") or line.endswith(" False"):
+            hard_labels.append(1.0 if line.endswith("True") else 0.0)
+    if hard_labels:
+        if len(hard_labels) != len(expected_ids):
+            raise ValueError(f"{path} has {len(hard_labels)} labels for {len(expected_ids)} input records")
+        return dict(zip(expected_ids, hard_labels))
+
+    raise ValueError(f"Could not parse prediction table: {path}")
+
+
+def parse_mirdnn(output_dir):
+    path = output_dir / "predictions.csv"
+    if not path.is_file():
+        raise FileNotFoundError(f"No mirDNN predictions.csv found under {output_dir}")
+    scores = {}
+    with open(path, newline="") as handle:
+        reader = csv.reader(handle)
+        for row in reader:
+            if len(row) >= 2:
+                scores[row[0]] = float(row[1])
+    return scores
+
+
+def parse_mire2e(output_dir, labels):
+    path = output_dir / "predictions.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"No miRe2e predictions.json found under {output_dir}")
+    with open(path) as handle:
+        payload = json.load(handle)
+    predictions = payload.get("predictions", [])
+    scores_by_id = defaultdict(list)
+    expected_ids = [row["record_id"] for row in labels]
+
+    if predictions and "record_id" in predictions[0]:
+        for item in predictions:
+            scores_by_id[item["record_id"]].append(max(float(item["score_5_3"]), float(item["score_3_5"])))
+    else:
+        if len(predictions) != len(expected_ids):
+            raise ValueError(f"miRe2e produced {len(predictions)} windows for {len(expected_ids)} input records")
+        for record_id, item in zip(expected_ids, predictions):
+            scores_by_id[record_id].append(max(float(item["score_5_3"]), float(item["score_3_5"])))
+
+    return {record_id: max(values) for record_id, values in scores_by_id.items()}
+
+
+def parse_mustard(output_dir):
+    all_files = list(output_dir.rglob("bed_tracks/all.predictions.class_0.bed.gz"))
+    files = all_files or [
+        path
+        for path in output_dir.rglob("bed_tracks/predictions.*.class_0.bed.gz")
+        if path.name != "all.predictions.class_0.bed.gz"
+    ]
+    if not files:
+        raise FileNotFoundError(f"No MuStARD class_0 BED predictions found under {output_dir}")
+    scores = {}
+    for path in files:
+        with gzip.open(path, "rt") as handle:
+            for raw_line in handle:
+                if not raw_line.strip() or raw_line.startswith("track"):
+                    continue
+                fields = raw_line.rstrip("\n").split("\t")
+                if len(fields) >= 5:
+                    scores[fields[3]] = float(fields[4])
+    return scores
+
+
+def parse_predictions(tool, output_dir, labels):
+    if tool == "deepmir":
+        return parse_deepmir(output_dir)
+    if tool in {"deepmirgene", "dnnpremir"}:
+        return parse_record_score_table(output_dir / "predictions.txt", labels)
+    if tool == "mirdnn":
+        return parse_mirdnn(output_dir)
+    if tool == "mire2e":
+        return parse_mire2e(output_dir, labels)
+    if tool == "mustard":
+        return parse_mustard(output_dir)
+    raise ValueError(f"Unsupported tool: {tool}")
+
+
+def species_from_record(record_id):
+    if "__" in record_id:
+        return record_id.split("__", 1)[0]
+    return ""
+
+
+def prediction_rows(tool, split, labels, scores):
+    rows = []
+    for index, item in enumerate(labels):
+        record_id = item["record_id"]
+        score = scores.get(record_id)
+        rows.append(
+            {
+                "tool": tool,
+                "split": split,
+                "record_id": record_id,
+                "species": species_from_record(record_id),
+                "label": item["label"],
+                "score": "" if score is None else score,
+                "predicted_label": "" if score is None else int(score >= 0.5),
+                "input_order": index,
+            }
+        )
+    return rows
+
+
+def average_precision(labels, scores):
+    positives = sum(labels)
+    if not labels or positives == 0:
+        return None
+    order = sorted(range(len(scores)), key=lambda idx: scores[idx], reverse=True)
+    hits = 0
+    total = 0.0
+    for rank, idx in enumerate(order, start=1):
+        if labels[idx]:
+            hits += 1
+            total += hits / rank
+    return total / positives
+
+
+def roc_auc(labels, scores):
+    positives = sum(labels)
+    negatives = len(labels) - positives
+    if positives == 0 or negatives == 0:
+        return None
+
+    sorted_items = sorted(enumerate(scores), key=lambda item: item[1])
+    ranks = [0.0] * len(scores)
+    idx = 0
+    while idx < len(sorted_items):
+        end = idx + 1
+        while end < len(sorted_items) and sorted_items[end][1] == sorted_items[idx][1]:
+            end += 1
+        avg_rank = (idx + 1 + end) / 2.0
+        for pos in range(idx, end):
+            ranks[sorted_items[pos][0]] = avg_rank
+        idx = end
+
+    positive_rank_sum = sum(rank for rank, label in zip(ranks, labels) if label)
+    return (positive_rank_sum - positives * (positives + 1) / 2.0) / (positives * negatives)
+
+
+def confusion_metrics(labels, scores, threshold=0.5):
+    predicted = [1 if score >= threshold else 0 for score in scores]
+    tp = sum(1 for y, yhat in zip(labels, predicted) if y == 1 and yhat == 1)
+    tn = sum(1 for y, yhat in zip(labels, predicted) if y == 0 and yhat == 0)
+    fp = sum(1 for y, yhat in zip(labels, predicted) if y == 0 and yhat == 1)
+    fn = sum(1 for y, yhat in zip(labels, predicted) if y == 1 and yhat == 0)
+
+    precision = tp / (tp + fp) if tp + fp else None
+    recall = tp / (tp + fn) if tp + fn else None
+    specificity = tn / (tn + fp) if tn + fp else None
+    accuracy = (tp + tn) / len(labels) if labels else None
+    f1 = (2 * precision * recall / (precision + recall)) if precision is not None and recall is not None and precision + recall else None
+    denom = math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+    mcc = (tp * tn - fp * fn) / denom if denom else None
+    return {
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "precision": precision,
+        "recall": recall,
+        "specificity": specificity,
+        "accuracy": accuracy,
+        "f1": f1,
+        "mcc": mcc,
+    }
+
+
+def best_f1(labels, scores):
+    best = {"best_f1": None, "best_threshold": None}
+    for threshold in sorted(set(scores), reverse=True):
+        f1 = confusion_metrics(labels, scores, threshold)["f1"]
+        if f1 is not None and (best["best_f1"] is None or f1 > best["best_f1"]):
+            best = {"best_f1": f1, "best_threshold": threshold}
+    return best
+
+
+def metric_row(tool, split, rows, group=None):
+    scored = [row for row in rows if row["score"] != ""]
+    labels = [int(row["label"]) for row in scored]
+    scores = [float(row["score"]) for row in scored]
+    metrics = confusion_metrics(labels, scores) if scored else {}
+    result = {
+        "tool": tool,
+        "split": split,
+        "group": group or "",
+        "records": len(rows),
+        "scored_records": len(scored),
+        "missing_predictions": len(rows) - len(scored),
+        "positives": sum(int(row["label"]) for row in rows),
+        "negatives": sum(1 for row in rows if int(row["label"]) == 0),
+        "auprc": average_precision(labels, scores) if scored else None,
+        "auroc": roc_auc(labels, scores) if scored else None,
+    }
+    result.update(metrics)
+    result.update(best_f1(labels, scores) if scored else {"best_f1": None, "best_threshold": None})
+    return result
+
+
+def grouped_metric_rows(tool, split, rows):
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[row["species"]].append(row)
+    return [metric_row(tool, split, group_rows, group=species) for species, group_rows in sorted(grouped.items())]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Evaluate trained tools on held-out benchmark splits.")
+    parser.add_argument("--dataset-dir", default="data/train/diverse20")
+    parser.add_argument("--training-root", default="results/training")
+    parser.add_argument("--run-name", default="diverse20_gpu_1to5")
+    parser.add_argument("--output-dir", default=None)
+    parser.add_argument("--tools", default="all")
+    parser.add_argument("--splits", default=",".join(DEFAULT_SPLITS))
+    parser.add_argument("--skip-inference", action="store_true", help="Parse existing raw outputs without rerunning Docker.")
+    parser.add_argument("--dry-run", action="store_true", help="Print Docker commands without running them.")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    root = repo_root()
+    train_helpers = load_train_helpers(root)
+    dataset_dir = expand_path(args.dataset_dir)
+    training_root = expand_path(args.training_root)
+    eval_dir = expand_path(args.output_dir) if args.output_dir else root / "results" / "evaluation" / args.run_name
+    tools = parse_csv_list(args.tools, TOOLS)
+    splits = parse_csv_list(args.splits, DEFAULT_SPLITS)
+
+    all_predictions = []
+    metrics = []
+    species_metrics = []
+
+    for tool in tools:
+        config_path = training_root / tool / args.run_name / "inference_config.yaml"
+        if not config_path.is_file():
+            raise FileNotFoundError(f"Missing trained inference config: {config_path}")
+        config = train_helpers.load_config(config_path)
+
+        for split in splits:
+            input_path, labels = make_labeled_input(dataset_dir, eval_dir, tool, split)
+            output_dir = eval_dir / "raw" / tool / split
+            if not args.skip_inference:
+                if output_dir.exists():
+                    shutil.rmtree(output_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                print(f"### {tool} {split}")
+                run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+            if args.dry_run:
+                continue
+
+            scores = parse_predictions(tool, output_dir, labels)
+            rows = prediction_rows(tool, split, labels, scores)
+            all_predictions.extend(rows)
+            metrics.append(metric_row(tool, split, rows))
+            species_metrics.extend(grouped_metric_rows(tool, split, rows))
+            print(
+                f"{tool} {split}: scored {metrics[-1]['scored_records']}/{metrics[-1]['records']} "
+                f"AUPRC={metrics[-1]['auprc']}"
+            )
+
+    if args.dry_run:
+        return
+
+    prediction_fields = ["tool", "split", "record_id", "species", "label", "score", "predicted_label", "input_order"]
+    metric_fields = [
+        "tool",
+        "split",
+        "group",
+        "records",
+        "scored_records",
+        "missing_predictions",
+        "positives",
+        "negatives",
+        "auprc",
+        "auroc",
+        "accuracy",
+        "precision",
+        "recall",
+        "specificity",
+        "f1",
+        "mcc",
+        "best_f1",
+        "best_threshold",
+        "tp",
+        "tn",
+        "fp",
+        "fn",
+    ]
+    write_table(eval_dir / "predictions.csv", all_predictions, prediction_fields)
+    write_table(eval_dir / "metrics.csv", metrics, metric_fields)
+    write_table(eval_dir / "metrics_by_species.csv", species_metrics, metric_fields)
+    print(f"Wrote evaluation outputs under {eval_dir}")
+
+
+if __name__ == "__main__":
+    main()
