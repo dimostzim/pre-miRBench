@@ -88,13 +88,14 @@ X_CAST = {
     "G)": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
     "C)": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 }
+UNKNOWN_VECTOR = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
 def encode_seq_struct(value):
     items = value.strip().split()[:180]
-    encoded = [X_CAST[item] for item in items]
+    encoded = [X_CAST.get(item, UNKNOWN_VECTOR) for item in items]
     while len(encoded) < 180:
-        encoded.append([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        encoded.append(UNKNOWN_VECTOR)
     return encoded
 
 
