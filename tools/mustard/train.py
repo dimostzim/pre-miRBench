@@ -11,10 +11,17 @@ import subprocess
 def require_tensorflow_gpu(device):
     if str(device).lower() == "cpu":
         raise SystemExit("MuStARD training requires a CUDA GPU; got --device cpu")
+    os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
     import tensorflow as tf
 
-    if not tf.config.list_physical_devices("GPU"):
+    gpus = tf.config.list_physical_devices("GPU")
+    if not gpus:
         raise SystemExit("MuStARD training requires a visible TensorFlow GPU")
+    for gpu in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError:
+            pass
 
 
 def class_label_map(class_list):

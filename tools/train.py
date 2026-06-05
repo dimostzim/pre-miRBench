@@ -434,6 +434,7 @@ def main():
         "--user", f"{os.getuid()}:{os.getgid()}",
         "-e", f"HOME=/work/results/training/{args.tool}/_home",
         "-e", f"XDG_CACHE_HOME=/work/results/training/{args.tool}/_home/.cache",
+        "-e", "TF_FORCE_GPU_ALLOW_GROWTH=true",
         "-v", f"{repo_root}:/work",
     ]
     for mount in mounts.values():

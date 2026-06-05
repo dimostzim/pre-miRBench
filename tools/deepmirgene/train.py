@@ -3,6 +3,8 @@ import argparse
 import os
 import random
 
+os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
+
 import numpy as np
 import tensorflow as tf
 from keras.callbacks import Callback, EarlyStopping
@@ -11,8 +13,14 @@ from keras.callbacks import Callback, EarlyStopping
 def require_tensorflow_gpu(device):
     if str(device).lower() == "cpu":
         raise SystemExit("deepMiRGene training requires a CUDA GPU; got --device cpu")
-    if not tf.config.list_physical_devices("GPU"):
+    gpus = tf.config.list_physical_devices("GPU")
+    if not gpus:
         raise SystemExit("deepMiRGene training requires a visible TensorFlow GPU")
+    for gpu in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError:
+            pass
 
 
 def load_upstream_namespace(source_dir):
