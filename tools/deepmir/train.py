@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 
+os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
+
 import imageio.v2 as imageio
 import keras
 import numpy as np
@@ -68,8 +70,14 @@ def build_callbacks(early_stopping_patience, monitor, validation_data, positive_
 def require_tensorflow_gpu(device):
     if str(device).lower() == "cpu":
         raise SystemExit("DeepMir training requires a CUDA GPU; got --device cpu")
-    if not tf.config.list_physical_devices("GPU"):
+    gpus = tf.config.list_physical_devices("GPU")
+    if not gpus:
         raise SystemExit("DeepMir training requires a visible TensorFlow GPU")
+    for gpu in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError:
+            pass
 
 
 def read_fasta(path):

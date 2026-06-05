@@ -6,6 +6,8 @@ import random
 import subprocess
 import sys
 
+os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
+
 import numpy as np
 from keras.callbacks import Callback, EarlyStopping
 
@@ -15,8 +17,14 @@ def require_tensorflow_gpu(device):
         raise SystemExit("dnnPreMiR training requires a CUDA GPU; got --device cpu")
     import tensorflow as tf
 
-    if not tf.config.list_physical_devices("GPU"):
+    gpus = tf.config.list_physical_devices("GPU")
+    if not gpus:
         raise SystemExit("dnnPreMiR training requires a visible TensorFlow GPU")
+    for gpu in gpus:
+        try:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError:
+            pass
 
 
 def patch_keras_optimizers():

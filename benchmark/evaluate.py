@@ -429,6 +429,8 @@ def run_inference(tool, root, train_helpers, config, input_path, output_dir, eva
         "HOME=/tmp",
         "-e",
         "XDG_CACHE_HOME=/tmp/.cache",
+        "-e",
+        "TF_FORCE_GPU_ALLOW_GROWTH=true",
         "-v",
         f"{root}:/work",
     ]
