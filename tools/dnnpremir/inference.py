@@ -6,6 +6,8 @@ import sys
 import numpy as np
 from keras.models import load_model
 
+UNKNOWN_VECTOR = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
 
 def read_fasta(path):
     name = None
@@ -24,6 +26,13 @@ def read_fasta(path):
                 parts.append(line)
     if name is not None:
         yield name, "".join(parts)
+
+
+def transform_seq_struct(seq_struct, x_cast):
+    encoded = [x_cast.get(item, UNKNOWN_VECTOR) for item in seq_struct[:180]]
+    while len(encoded) < 180:
+        encoded.append(UNKNOWN_VECTOR)
+    return encoded
 
 
 def main():
@@ -62,7 +71,7 @@ def main():
             with open("./temp/temp_sequence.fa", "w") as handle:
                 handle.write(f">{name}\n{sequence}\n")
             seq_struct = isPreMiR.second_struct_predict(sequence)
-            vectors.append(isPreMiR.transform_seq_struct(seq_struct))
+            vectors.append(transform_seq_struct(seq_struct, isPreMiR.x_cast))
         if not records:
             raise ValueError(f"No FASTA records found in {input_path}")
 

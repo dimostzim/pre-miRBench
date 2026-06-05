@@ -188,6 +188,13 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertIn(os.path.abspath(cons_dir), mounts)
         self.assertFalse(mounts[os.path.abspath(cons_dir)].endswith(":ro"))
 
+    def test_training_wrapper_mounts_host_train_script(self):
+        cmd = []
+        self.train.add_training_wrapper_mount(cmd, self.repo_root, "dnnpremir")
+
+        expected = os.path.join(self.repo_root, "tools", "dnnpremir", "train.py")
+        self.assertEqual(cmd, ["-v", f"{expected}:/opt/dnnpremir/train.py:ro"])
+
 
 if __name__ == "__main__":
     unittest.main()

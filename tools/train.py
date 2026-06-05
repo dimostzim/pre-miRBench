@@ -167,6 +167,12 @@ def add_optional_arg(cmd, flag, value):
         cmd.extend([flag, str(value)])
 
 
+def add_training_wrapper_mount(cmd, repo_root, tool):
+    wrapper = os.path.join(repo_root, "tools", tool, "train.py")
+    if os.path.isfile(wrapper):
+        cmd.extend(["-v", f"{wrapper}:/opt/{tool}/train.py:ro"])
+
+
 def add_common_training_args(cmd, config):
     for key, flag in (
         ("device", "--device"),
@@ -432,6 +438,7 @@ def main():
     ]
     for mount in mounts.values():
         cmd.extend(["-v", mount])
+    add_training_wrapper_mount(cmd, repo_root, args.tool)
     cmd.extend(["--entrypoint", "python", f"{args.tool}:latest"])
     cmd.extend(tool_args)
 
