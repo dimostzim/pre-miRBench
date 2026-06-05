@@ -1,5 +1,7 @@
 import gzip
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -20,6 +22,36 @@ class EvaluateTest(unittest.TestCase):
         self.evaluate = load_evaluate_module(self.repo_root)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
+
+    def test_load_requested_configs_preflights_missing_tools(self):
+        class Helpers:
+            @staticmethod
+            def load_config(path):
+                return {"config_path": str(path)}
+
+        training_root = self.evaluate.Path(self.temp_dir.name) / "training"
+        present = training_root / "deepmir" / "run1"
+        present.mkdir(parents=True)
+        (present / "inference_config.yaml").write_text("model: model.h5\n")
+
+        with self.assertRaises(FileNotFoundError) as ctx:
+            self.evaluate.load_requested_configs(
+                Helpers,
+                training_root,
+                "run1",
+                ["deepmir", "dnnpremir"],
+            )
+        self.assertIn("dnnpremir", str(ctx.exception))
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            configs = self.evaluate.load_requested_configs(
+                Helpers,
+                training_root,
+                "run1",
+                ["deepmir", "dnnpremir"],
+                allow_missing=True,
+            )
+        self.assertEqual(sorted(configs), ["deepmir"])
 
     def test_metric_row_computes_ranking_and_threshold_metrics(self):
         rows = [
