@@ -551,8 +551,35 @@ def parse_args():
     parser.add_argument("--tools", default="all")
     parser.add_argument("--splits", default=",".join(DEFAULT_SPLITS))
     parser.add_argument("--skip-inference", action="store_true", help="Parse existing raw outputs without rerunning Docker.")
+    parser.add_argument("--resume", action="store_true", help="Reuse non-empty raw output directories instead of rerunning them.")
+    parser.add_argument("--allow-missing", action="store_true", help="Skip tools whose trained inference_config.yaml is missing.")
     parser.add_argument("--dry-run", action="store_true", help="Print Docker commands without running them.")
     return parser.parse_args()
+
+
+def load_requested_configs(train_helpers, training_root, run_name, tools, allow_missing=False):
+    configs = {}
+    missing = []
+    for tool in tools:
+        config_path = training_root / tool / run_name / "inference_config.yaml"
+        if not config_path.is_file():
+            missing.append((tool, config_path))
+            continue
+        configs[tool] = train_helpers.load_config(config_path)
+
+    if missing and not allow_missing:
+        details = "\n".join(f"  - {tool}: {path}" for tool, path in missing)
+        raise FileNotFoundError(
+            "Missing trained inference configs. Train these tools first, use --tools to evaluate a subset, "
+            f"or pass --allow-missing to skip them:\n{details}"
+        )
+    for tool, path in missing:
+        print(f"warning: skipping {tool}; missing trained inference config: {path}")
+    return configs
+
+
+def has_raw_output(path):
+    return path.is_dir() and any(path.iterdir())
 
 
 def main():
@@ -564,28 +591,35 @@ def main():
     eval_dir = expand_path(args.output_dir) if args.output_dir else root / "results" / "evaluation" / args.run_name
     tools = parse_csv_list(args.tools, TOOLS)
     splits = parse_csv_list(args.splits, DEFAULT_SPLITS)
+    configs = load_requested_configs(train_helpers, training_root, args.run_name, tools, allow_missing=args.allow_missing)
+    tools = [tool for tool in tools if tool in configs]
+    if not tools:
+        raise ValueError("No tools left to evaluate after filtering missing trained configs")
 
     all_predictions = []
     metrics = []
     species_metrics = []
 
     for tool in tools:
-        config_path = training_root / tool / args.run_name / "inference_config.yaml"
-        if not config_path.is_file():
-            raise FileNotFoundError(f"Missing trained inference config: {config_path}")
-        config = train_helpers.load_config(config_path)
+        config = configs[tool]
 
         for split in splits:
             input_path, labels = make_labeled_input(dataset_dir, eval_dir, tool, split)
             output_dir = eval_dir / "raw" / tool / split
             if not args.skip_inference:
-                if output_dir.exists():
-                    shutil.rmtree(output_dir)
-                output_dir.mkdir(parents=True, exist_ok=True)
-                print(f"### {tool} {split}")
-                run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+                if args.resume and has_raw_output(output_dir):
+                    print(f"### {tool} {split} (resume: using existing raw output)")
+                else:
+                    print(f"### {tool} {split}")
+                    if output_dir.exists():
+                        shutil.rmtree(output_dir)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
             if args.dry_run:
                 continue
+            if not has_raw_output(output_dir):
+                mode = "--skip-inference" if args.skip_inference else "inference"
+                raise FileNotFoundError(f"Missing raw output after {mode}: {output_dir}")
 
             scores = parse_predictions(tool, output_dir, labels)
             rows = prediction_rows(tool, split, labels, scores)
