@@ -2,6 +2,7 @@
 import argparse
 import csv
 import gzip
+import html
 import importlib.util
 import json
 import math
@@ -16,6 +17,14 @@ from pathlib import Path
 TOOLS = ("deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e", "mustard")
 FASTA_TOOLS = {"deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e"}
 DEFAULT_SPLITS = ("test_chrom", "test_species")
+SPLIT_LABELS = {
+    "test_chrom": "Test set",
+    "test_species": "Left-out set",
+}
+SPLIT_COLORS = {
+    "test_chrom": "#2f6fbd",
+    "test_species": "#d7832f",
+}
 
 
 def repo_root():
@@ -180,6 +189,106 @@ def write_table(path, rows, fieldnames):
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
+
+
+def as_float(value):
+    if value in (None, ""):
+        return None
+    return float(value)
+
+
+def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
+    values = {}
+    for row in metric_rows:
+        auprc = as_float(row.get("auprc"))
+        if auprc is None:
+            continue
+        values[(row["tool"], row["split"])] = auprc
+
+    tools = [tool for tool in TOOLS if any((tool, split) in values for split in splits)]
+    if not tools:
+        return False
+
+    width = max(760, 130 * len(tools) + 180)
+    height = 500
+    margin_left = 70
+    margin_right = 35
+    margin_top = 55
+    margin_bottom = 95
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    baseline = margin_top + plot_height
+    group_width = plot_width / len(tools)
+    bar_width = min(34, group_width / 4.2)
+    if len(splits) == 1:
+        split_offsets = {splits[0]: 0}
+    else:
+        offset_step = bar_width * 1.24
+        midpoint = (len(splits) - 1) / 2.0
+        split_offsets = {split: (index - midpoint) * offset_step for index, split in enumerate(splits)}
+
+    def x_for(tool_index, split):
+        center = margin_left + group_width * (tool_index + 0.5)
+        return center + split_offsets.get(split, 0) - bar_width / 2
+
+    def y_for(value):
+        return baseline - max(0.0, min(1.0, value)) * plot_height
+
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<style>",
+        "text { font-family: Arial, Helvetica, sans-serif; fill: #1f2933; }",
+        ".axis { stroke: #2d3748; stroke-width: 1.3; }",
+        ".grid { stroke: #d8dee9; stroke-width: 1; }",
+        ".tick { font-size: 12px; fill: #52606d; }",
+        ".label { font-size: 13px; }",
+        ".title { font-size: 18px; font-weight: 700; }",
+        ".value { font-size: 11px; fill: #334e68; }",
+        "</style>",
+        f'<text class="title" x="{width / 2:.1f}" y="28" text-anchor="middle">AUPRC by Tool</text>',
+    ]
+
+    for tick in (0.0, 0.25, 0.5, 0.75, 1.0):
+        y = y_for(tick)
+        lines.append(f'<line class="grid" x1="{margin_left}" y1="{y:.1f}" x2="{width - margin_right}" y2="{y:.1f}"/>')
+        lines.append(f'<text class="tick" x="{margin_left - 10}" y="{y + 4:.1f}" text-anchor="end">{tick:.2f}</text>')
+
+    lines.append(f'<line class="axis" x1="{margin_left}" y1="{baseline}" x2="{width - margin_right}" y2="{baseline}"/>')
+    lines.append(f'<line class="axis" x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{baseline}"/>')
+    lines.append(f'<text class="label" x="{margin_left + plot_width / 2:.1f}" y="{height - 18}" text-anchor="middle">Tool</text>')
+    lines.append(
+        f'<text class="label" x="18" y="{margin_top + plot_height / 2:.1f}" text-anchor="middle" '
+        'transform="rotate(-90 18 '
+        f'{margin_top + plot_height / 2:.1f})">AUPRC</text>'
+    )
+
+    legend_x = width - margin_right - 220
+    legend_y = 18
+    for index, split in enumerate(splits):
+        x = legend_x + index * 110
+        color = SPLIT_COLORS.get(split, "#6b7280")
+        label = html.escape(SPLIT_LABELS.get(split, split))
+        lines.append(f'<rect x="{x}" y="{legend_y}" width="13" height="13" fill="{color}"/>')
+        lines.append(f'<text class="tick" x="{x + 18}" y="{legend_y + 11}">{label}</text>')
+
+    for tool_index, tool in enumerate(tools):
+        center = margin_left + group_width * (tool_index + 0.5)
+        lines.append(f'<text class="label" x="{center:.1f}" y="{baseline + 28}" text-anchor="middle">{html.escape(tool)}</text>')
+        for split in splits:
+            value = values.get((tool, split))
+            if value is None:
+                continue
+            x = x_for(tool_index, split)
+            y = y_for(value)
+            bar_height = baseline - y
+            color = SPLIT_COLORS.get(split, "#6b7280")
+            lines.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" fill="{color}"/>')
+            lines.append(f'<text class="value" x="{x + bar_width / 2:.1f}" y="{y - 5:.1f}" text-anchor="middle">{value:.3f}</text>')
+
+    lines.append("</svg>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")
+    return True
 
 
 def build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts):
@@ -662,6 +771,8 @@ def main():
     write_table(eval_dir / "predictions.csv", all_predictions, prediction_fields)
     write_table(eval_dir / "metrics.csv", metrics, metric_fields)
     write_table(eval_dir / "metrics_by_species.csv", species_metrics, metric_fields)
+    if write_auprc_bar_plot(eval_dir / "auprc_by_tool.svg", metrics):
+        print(f"Wrote AUPRC plot: {eval_dir / 'auprc_by_tool.svg'}")
     print(f"Wrote evaluation outputs under {eval_dir}")
 
 

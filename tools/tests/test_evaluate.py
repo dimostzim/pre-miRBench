@@ -70,6 +70,29 @@ class EvaluateTest(unittest.TestCase):
         self.assertEqual(metrics["tn"], 1)
         self.assertEqual(metrics["fn"], 0)
 
+    def test_write_auprc_bar_plot(self):
+        path = self.evaluate.Path(self.temp_dir.name) / "auprc_by_tool.svg"
+        wrote = self.evaluate.write_auprc_bar_plot(
+            path,
+            [
+                {"tool": "deepmir", "split": "test_chrom", "auprc": 0.81234},
+                {"tool": "deepmir", "split": "test_species", "auprc": 0.71234},
+                {"tool": "mirdnn", "split": "test_chrom", "auprc": 0.9},
+                {"tool": "mirdnn", "split": "test_species", "auprc": 0.8},
+            ],
+        )
+
+        text = path.read_text()
+        self.assertTrue(wrote)
+        self.assertIn("<svg", text)
+        self.assertIn("AUPRC by Tool", text)
+        self.assertIn(">Tool</text>", text)
+        self.assertIn("Test set", text)
+        self.assertIn("Left-out set", text)
+        self.assertIn("deepmir", text)
+        self.assertIn("mirdnn", text)
+        self.assertIn("0.812", text)
+
     def test_parse_mire2e_aggregates_record_windows(self):
         output_dir = os.path.join(self.temp_dir.name, "mire2e")
         os.makedirs(output_dir)
