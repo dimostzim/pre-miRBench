@@ -111,6 +111,7 @@ This writes raw per-tool inference outputs plus:
 - `metrics.csv` - aggregate metrics per tool and split
 - `metrics_by_species.csv` - the same metrics stratified by species
 - `auprc_by_tool.svg` - grouped AUPRC bars for test and left-out splits
+- `run.log.txt` - evaluator and Docker/tool console output for debugging
 
 The evaluator mounts the current wrapper scripts into Docker, so wrapper-only
 output fixes are picked up after `git pull` without rebuilding the images.

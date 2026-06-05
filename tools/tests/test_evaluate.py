@@ -5,6 +5,7 @@ import io
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 
@@ -52,6 +53,26 @@ class EvaluateTest(unittest.TestCase):
                 allow_missing=True,
             )
         self.assertEqual(sorted(configs), ["deepmir"])
+
+    def test_default_log_path_is_under_output_dir(self):
+        args = SimpleNamespace(
+            output_dir=os.path.join(self.temp_dir.name, "evaluation"),
+            run_name="run1",
+            log_file=None,
+        )
+
+        eval_dir = self.evaluate.evaluation_output_dir(args)
+        self.assertEqual(self.evaluate.evaluation_log_path(args, eval_dir), eval_dir / "run.log.txt")
+
+    def test_tee_writes_to_all_streams(self):
+        one = io.StringIO()
+        two = io.StringIO()
+        tee = self.evaluate.Tee(one, two)
+
+        tee.write("hello\n")
+
+        self.assertEqual(one.getvalue(), "hello\n")
+        self.assertEqual(two.getvalue(), "hello\n")
 
     def test_metric_row_computes_ranking_and_threshold_metrics(self):
         rows = [

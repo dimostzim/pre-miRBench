@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import contextlib
 import csv
 import gzip
 import html
@@ -10,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import traceback
 from collections import defaultdict
 from pathlib import Path
 
@@ -52,6 +54,31 @@ def parse_csv_list(value, allowed=None):
 
 def expand_path(path):
     return Path(os.path.expandvars(os.path.expanduser(str(path)))).resolve()
+
+
+def evaluation_output_dir(args):
+    root = repo_root()
+    return expand_path(args.output_dir) if args.output_dir else root / "results" / "evaluation" / args.run_name
+
+
+def evaluation_log_path(args, eval_dir):
+    if args.log_file:
+        return expand_path(args.log_file)
+    return eval_dir / "run.log.txt"
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
 
 
 def config_host_path(root, value):
@@ -376,6 +403,16 @@ def add_runtime_mounts(tool, root, eval_dir, split, cmd):
         cmd.extend(["-v", f"{temp_dir}:/opt/dnnpremir/dnnpremir_src/temp"])
 
 
+def stream_command(cmd):
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    assert process.stdout is not None
+    for line in process.stdout:
+        print(line, end="")
+    return_code = process.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
+
+
 def run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=False):
     mounts = {}
     tool_args = build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts)
@@ -404,7 +441,7 @@ def run_inference(tool, root, train_helpers, config, input_path, output_dir, eva
     if dry_run:
         print(" ".join(cmd))
         return
-    subprocess.check_call(cmd)
+    stream_command(cmd)
 
 
 def parse_deepmir(output_dir):
@@ -663,6 +700,7 @@ def parse_args():
     parser.add_argument("--resume", action="store_true", help="Reuse non-empty raw output directories instead of rerunning them.")
     parser.add_argument("--allow-missing", action="store_true", help="Skip tools whose trained inference_config.yaml is missing.")
     parser.add_argument("--dry-run", action="store_true", help="Print Docker commands without running them.")
+    parser.add_argument("--log-file", help="Optional log path. Defaults to <output-dir>/run.log.txt.")
     return parser.parse_args()
 
 
@@ -691,13 +729,12 @@ def has_raw_output(path):
     return path.is_dir() and any(path.iterdir())
 
 
-def main():
-    args = parse_args()
+def run_evaluation(args):
     root = repo_root()
     train_helpers = load_train_helpers(root)
     dataset_dir = expand_path(args.dataset_dir)
     training_root = expand_path(args.training_root)
-    eval_dir = expand_path(args.output_dir) if args.output_dir else root / "results" / "evaluation" / args.run_name
+    eval_dir = evaluation_output_dir(args)
     tools = parse_csv_list(args.tools, TOOLS)
     splits = parse_csv_list(args.splits, DEFAULT_SPLITS)
     configs = load_requested_configs(train_helpers, training_root, args.run_name, tools, allow_missing=args.allow_missing)
@@ -776,5 +813,24 @@ def main():
     print(f"Wrote evaluation outputs under {eval_dir}")
 
 
+def main():
+    args = parse_args()
+    eval_dir = evaluation_output_dir(args)
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    log_path = evaluation_log_path(args, eval_dir)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "w", buffering=1) as log_handle:
+        stdout = Tee(sys.stdout, log_handle)
+        stderr = Tee(sys.stderr, log_handle)
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            print(f"Writing evaluation log: {log_path}")
+            try:
+                run_evaluation(args)
+            except Exception:
+                traceback.print_exc()
+                return 1
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
