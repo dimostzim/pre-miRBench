@@ -114,6 +114,21 @@ class EvaluateTest(unittest.TestCase):
         self.assertIn("mirdnn", text)
         self.assertIn("0.812", text)
 
+    def test_write_auprc_bar_plot_png(self):
+        path = self.evaluate.Path(self.temp_dir.name) / "auprc_by_tool.png"
+        wrote = self.evaluate.write_auprc_bar_plot_png(
+            path,
+            [
+                {"tool": "deepmir", "split": "test_chrom", "auprc": 0.81234},
+                {"tool": "deepmir", "split": "test_species", "auprc": 0.71234},
+            ],
+        )
+        if not wrote:
+            self.skipTest("matplotlib is not available")
+
+        with open(path, "rb") as handle:
+            self.assertEqual(handle.read(8), b"\x89PNG\r\n\x1a\n")
+
     def test_parse_mire2e_aggregates_record_windows(self):
         output_dir = os.path.join(self.temp_dir.name, "mire2e")
         os.makedirs(output_dir)

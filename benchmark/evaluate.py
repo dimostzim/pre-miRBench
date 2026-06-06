@@ -318,6 +318,73 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
     return True
 
 
+def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return False
+
+    values = {}
+    for row in metric_rows:
+        auprc = as_float(row.get("auprc"))
+        if auprc is None:
+            continue
+        values[(row["tool"], row["split"])] = auprc
+
+    tools = [tool for tool in TOOLS if any((tool, split) in values for split in splits)]
+    if not tools:
+        return False
+
+    fig_width = max(7.6, 1.25 * len(tools) + 1.8)
+    fig, ax = plt.subplots(figsize=(fig_width, 5.0), dpi=160)
+    x_positions = list(range(len(tools)))
+    bar_width = 0.34 if len(splits) > 1 else 0.55
+    midpoint = (len(splits) - 1) / 2.0
+
+    for split_index, split in enumerate(splits):
+        offset = (split_index - midpoint) * bar_width
+        heights = [values.get((tool, split), 0.0) for tool in tools]
+        present = [(tool, split) in values for tool in tools]
+        color = SPLIT_COLORS.get(split, "#6b7280")
+        bars = ax.bar(
+            [position + offset for position in x_positions],
+            heights,
+            width=bar_width * 0.92,
+            color=color,
+            label=SPLIT_LABELS.get(split, split),
+        )
+        for bar, height, is_present in zip(bars, heights, present):
+            if not is_present:
+                bar.set_alpha(0.0)
+                continue
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                min(1.02, height + 0.018),
+                f"{height:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    ax.set_title("AUPRC by Tool", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Tool")
+    ax.set_ylabel("AUPRC")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(tools)
+    ax.set_ylim(0, 1.05)
+    ax.grid(axis="y", color="#d8dee9", linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.legend(frameon=False, loc="upper right")
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path)
+    plt.close(fig)
+    return True
+
+
 def build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts):
     input_arg = train_helpers.container_path(str(root), input_path, mounts)
     output_arg = train_helpers.container_path(str(root), output_dir, mounts, read_only=False)
@@ -543,6 +610,7 @@ def parse_mustard(output_dir, positive_class_index=1):
     ]
     if not files:
         raise FileNotFoundError(f"No MuStARD {class_name} BED predictions found under {output_dir}")
+    print(f"MuStARD positive score source: {class_name} ({len(files)} BED file(s))")
     scores = {}
     for path in files:
         with gzip.open(path, "rt") as handle:
@@ -819,6 +887,8 @@ def run_evaluation(args):
     write_table(eval_dir / "metrics_by_species.csv", species_metrics, metric_fields)
     if write_auprc_bar_plot(eval_dir / "auprc_by_tool.svg", metrics):
         print(f"Wrote AUPRC plot: {eval_dir / 'auprc_by_tool.svg'}")
+    if write_auprc_bar_plot_png(eval_dir / "auprc_by_tool.png", metrics):
+        print(f"Wrote AUPRC plot: {eval_dir / 'auprc_by_tool.png'}")
     print(f"Wrote evaluation outputs under {eval_dir}")
 
 
