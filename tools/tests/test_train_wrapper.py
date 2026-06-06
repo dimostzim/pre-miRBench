@@ -188,6 +188,23 @@ class TrainWrapperTest(unittest.TestCase):
         self.assertIn(os.path.abspath(cons_dir), mounts)
         self.assertFalse(mounts[os.path.abspath(cons_dir)].endswith(":ro"))
 
+    def test_mustard_inference_config_records_positive_class_index(self):
+        output_dir = os.path.join(self.repo_root, "results", "training", "dummy", "unit")
+
+        inference_config = self.train.generated_inference_config(
+            "mustard",
+            self.repo_root,
+            {
+                "positiveIntervals": "positive.bed",
+                "genome": "genome.fa",
+                "consDir": "cons",
+                "classList": "0,1",
+            },
+            output_dir,
+        )
+
+        self.assertEqual(inference_config["positiveClassIndex"], 1)
+
     def test_training_wrapper_mounts_host_train_script(self):
         cmd = []
         self.train.add_training_wrapper_mount(cmd, self.repo_root, "dnnpremir")

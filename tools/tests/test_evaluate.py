@@ -136,16 +136,20 @@ class EvaluateTest(unittest.TestCase):
 
         self.assertEqual(scores, {"a": 0.7, "b": 0.5})
 
-    def test_parse_mustard_reads_positive_class_bed_scores(self):
+    def test_parse_mustard_reads_configured_positive_class_bed_scores(self):
         output_dir = os.path.join(self.temp_dir.name, "mustard")
         bed_dir = os.path.join(output_dir, "predict", "static", "results", "bed_tracks")
         os.makedirs(bed_dir)
-        path = os.path.join(bed_dir, "predictions.chr1.class_0.bed.gz")
-        with gzip.open(path, "wt") as handle:
+        negative_path = os.path.join(bed_dir, "predictions.chr1.class_0.bed.gz")
+        with gzip.open(negative_path, "wt") as handle:
+            handle.write("chr1\t10\t20\trec1\t0.25\t+\n")
+            handle.write("chr1\t30\t40\trec2\t0.75\t-\n")
+        positive_path = os.path.join(bed_dir, "predictions.chr1.class_1.bed.gz")
+        with gzip.open(positive_path, "wt") as handle:
             handle.write("chr1\t10\t20\trec1\t0.75\t+\n")
             handle.write("chr1\t30\t40\trec2\t0.25\t-\n")
 
-        scores = self.evaluate.parse_mustard(self.evaluate.Path(output_dir))
+        scores = self.evaluate.parse_mustard(self.evaluate.Path(output_dir), positive_class_index=1)
 
         self.assertEqual(scores, {"rec1": 0.75, "rec2": 0.25})
 

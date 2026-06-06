@@ -173,6 +173,23 @@ def add_training_wrapper_mount(cmd, repo_root, tool):
         cmd.extend(["-v", f"{wrapper}:/opt/{tool}/train.py:ro"])
 
 
+def mustard_positive_class_index(config):
+    if config.get("positiveClassIndex") is not None:
+        return int(config["positiveClassIndex"])
+
+    classes = [int(value) for value in str(config.get("classList", "0,1")).split(",")]
+    if len(classes) != 2:
+        raise ValueError("MuStARD positive class index inference expects exactly two classes")
+
+    unique_classes = sorted(set(classes))
+    one_hot_classes = []
+    for i in range(len(unique_classes)):
+        one_hot_classes.append(["1" if i == j else "0" for j in range(len(unique_classes))])
+
+    positive_label = one_hot_classes[classes[0] - 1]
+    return positive_label.index("1")
+
+
 def add_common_training_args(cmd, config):
     for key, flag in (
         ("device", "--device"),
@@ -391,6 +408,7 @@ def generated_inference_config(tool, repo_root, config, output_dir):
             "threads": config.get("threads", 10),
             "modelDirName": config.get("modelDirName", "results"),
             "intermDir": config.get("intermDir", "results/mustard_intermediate"),
+            "positiveClassIndex": mustard_positive_class_index(config),
         }
     raise ValueError(f"Unsupported tool: {tool}")
 
