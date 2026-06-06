@@ -527,15 +527,22 @@ def parse_mire2e(output_dir, labels):
     return {record_id: max(values) for record_id, values in scores_by_id.items()}
 
 
-def parse_mustard(output_dir):
-    all_files = list(output_dir.rglob("bed_tracks/all.predictions.class_0.bed.gz"))
+def mustard_positive_class_index(config=None):
+    if config and config.get("positiveClassIndex") is not None:
+        return int(config["positiveClassIndex"])
+    return 1
+
+
+def parse_mustard(output_dir, positive_class_index=1):
+    class_name = f"class_{int(positive_class_index)}"
+    all_files = list(output_dir.rglob(f"bed_tracks/all.predictions.{class_name}.bed.gz"))
     files = all_files or [
         path
-        for path in output_dir.rglob("bed_tracks/predictions.*.class_0.bed.gz")
-        if path.name != "all.predictions.class_0.bed.gz"
+        for path in output_dir.rglob(f"bed_tracks/predictions.*.{class_name}.bed.gz")
+        if path.name != f"all.predictions.{class_name}.bed.gz"
     ]
     if not files:
-        raise FileNotFoundError(f"No MuStARD class_0 BED predictions found under {output_dir}")
+        raise FileNotFoundError(f"No MuStARD {class_name} BED predictions found under {output_dir}")
     scores = {}
     for path in files:
         with gzip.open(path, "rt") as handle:
@@ -548,7 +555,7 @@ def parse_mustard(output_dir):
     return scores
 
 
-def parse_predictions(tool, output_dir, labels):
+def parse_predictions(tool, output_dir, labels, config=None):
     if tool == "deepmir":
         return parse_deepmir(output_dir)
     if tool in {"deepmirgene", "dnnpremir"}:
@@ -558,7 +565,7 @@ def parse_predictions(tool, output_dir, labels):
     if tool == "mire2e":
         return parse_mire2e(output_dir, labels)
     if tool == "mustard":
-        return parse_mustard(output_dir)
+        return parse_mustard(output_dir, mustard_positive_class_index(config))
     raise ValueError(f"Unsupported tool: {tool}")
 
 
@@ -769,7 +776,7 @@ def run_evaluation(args):
                 mode = "--skip-inference" if args.skip_inference else "inference"
                 raise FileNotFoundError(f"Missing raw output after {mode}: {output_dir}")
 
-            scores = parse_predictions(tool, output_dir, labels)
+            scores = parse_predictions(tool, output_dir, labels, config)
             rows = prediction_rows(tool, split, labels, scores)
             all_predictions.extend(rows)
             metrics.append(metric_row(tool, split, rows))

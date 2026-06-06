@@ -9,10 +9,11 @@ validationNegativeIntervals: data/train/tool_inputs/mustard/validation_negative.
 genome: data/train/raw/hsa_chr14/chr14.fa
 consDir: data/train/raw/hsa_chr14
 
-# Positive intervals are first and assigned class 0 so class_0 remains the
-# positive class in downstream normalization.
+# Positive intervals are first and assigned class 0. Upstream MuStARD maps
+# classList 0,1 to one-hot labels 0_1,1_0, so positive scores are class_1.
 classList: 0,1
 classNum: 2
+positiveClassIndex: 1
 device: cuda
 maxSize: 200
 extFlag: 0
