@@ -237,11 +237,11 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
         return False
 
     width = max(760, 130 * len(tools) + 180)
-    height = 500
+    height = 540
     margin_left = 70
     margin_right = 35
     margin_top = 55
-    margin_bottom = 95
+    margin_bottom = 130
     plot_width = width - margin_left - margin_right
     plot_height = height - margin_top - margin_bottom
     baseline = margin_top + plot_height
@@ -282,21 +282,24 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
 
     lines.append(f'<line class="axis" x1="{margin_left}" y1="{baseline}" x2="{width - margin_right}" y2="{baseline}"/>')
     lines.append(f'<line class="axis" x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{baseline}"/>')
-    lines.append(f'<text class="label" x="{margin_left + plot_width / 2:.1f}" y="{height - 18}" text-anchor="middle">Tool</text>')
+    lines.append(f'<text class="label" x="{margin_left + plot_width / 2:.1f}" y="{baseline + 58}" text-anchor="middle">Tool</text>')
     lines.append(
         f'<text class="label" x="18" y="{margin_top + plot_height / 2:.1f}" text-anchor="middle" '
         'transform="rotate(-90 18 '
         f'{margin_top + plot_height / 2:.1f})">AUPRC</text>'
     )
 
-    legend_x = width - margin_right - 220
-    legend_y = 18
-    for index, split in enumerate(splits):
-        x = legend_x + index * 110
+    legend_items = [(split, SPLIT_LABELS.get(split, split)) for split in splits]
+    legend_widths = [max(90, 28 + 7 * len(label)) for _, label in legend_items]
+    legend_x = margin_left + plot_width / 2.0 - sum(legend_widths) / 2.0
+    legend_y = baseline + 80
+    cursor = legend_x
+    for (split, label_text), item_width in zip(legend_items, legend_widths):
         color = SPLIT_COLORS.get(split, "#6b7280")
-        label = html.escape(SPLIT_LABELS.get(split, split))
-        lines.append(f'<rect x="{x}" y="{legend_y}" width="13" height="13" fill="{color}"/>')
-        lines.append(f'<text class="tick" x="{x + 18}" y="{legend_y + 11}">{label}</text>')
+        label = html.escape(label_text)
+        lines.append(f'<rect x="{cursor:.1f}" y="{legend_y:.1f}" width="13" height="13" fill="{color}"/>')
+        lines.append(f'<text class="tick" x="{cursor + 18:.1f}" y="{legend_y + 11:.1f}">{label}</text>')
+        cursor += item_width
 
     for tool_index, tool in enumerate(tools):
         center = margin_left + group_width * (tool_index + 0.5)
@@ -377,8 +380,13 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
     ax.set_ylim(0, 1.05)
     ax.grid(axis="y", color="#d8dee9", linewidth=0.8)
     ax.set_axisbelow(True)
-    ax.legend(frameon=False, loc="upper right")
-    fig.tight_layout()
+    ax.legend(
+        frameon=False,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=max(1, len(splits)),
+    )
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path)
     plt.close(fig)
