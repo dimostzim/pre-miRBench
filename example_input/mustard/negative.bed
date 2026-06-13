@@ -1,4 +1,0 @@
-chrTrain	200	270	neg_train_001	0	+
-chrTrain	290	360	neg_train_002	0	-
-chrTest	100	170	neg_test_001	0	+
-chrValid	100	170	neg_valid_001	0	+

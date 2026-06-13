@@ -1,8 +1,0 @@
-# DeepMir Configuration
-# Default smoke input committed with the repository.
-
-# Required parameters
-input: data/smoke/tool_smoke_test.fa
-
-# Optional parameters (defaults shown)
-model: fine_tuned_cnn    # default: fine_tuned_cnn (best performing, options: fine_tuned_cnn, base_cnn)

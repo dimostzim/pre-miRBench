@@ -1,5 +1,0 @@
-# dnnPreMiR Configuration
-# Default smoke input committed with the repository.
-
-# Required parameters
-input: data/smoke/tool_smoke_test.fa
