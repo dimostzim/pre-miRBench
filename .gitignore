@@ -1,47 +1,21 @@
-# MuStARD 
-tools/mustard/data/
-tools/mustard/mustard_src/
-tools/mustard/results/
+# upstream tool checkouts and build artifacts
+tools/*/*_src/
+tools/*/data/
+tools/*/results/
 
-# miRe2e 
-tools/mire2e/data/
-tools/mire2e/results/
-
-# mirDNN 
-tools/mirdnn/data/
-tools/mirdnn/mirdnn_src/
-tools/mirdnn/results/
-
-#dnnpremir
-tools/dnnpremir/data/
-tools/dnnpremir/dnnpremir_src/
-tools/dnnpremir/results/
-
-#deepmir 
-tools/deepmir/data/
-tools/deepmir/deepmir_src/
-tools/deepmir/results/
-
-#deepmirgene
-tools/deepmirgene/data/
-tools/deepmirgene/deepmirgene_src/
-tools/deepmirgene/results/
-
-# unified inference results
-results/
-
-# generated benchmark/training scratch
-benchmark/output/
-benchmark/download/data/
-benchmark/tmp/
-benchmark/train_data/work*/
-
-# generated training data
+# generated pipeline data
+data/raw/
+data/datasets/
+data/work/
 data/train/
 
-#orthologues
-premirna_orthologues/results/
+# generated outputs
+results/
 
+# local assistant/editor state
+.claude/
+
+# Python/cache noise
 __pycache__/
 *.pyc
 *.pyo
