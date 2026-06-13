@@ -161,7 +161,7 @@ ensure_alias() {
     fi
 
     rm -f "$temp_alias"
-    if curl -fsSL -o "$temp_alias" "$alias_url"; then
+    if curl -fsSL -o "$temp_alias" "$alias_url" 2>/dev/null; then
         mv "$temp_alias" "${alias_path}.gz"
         gunzip -f "${alias_path}.gz" >/dev/null 2>&1 || rm -f "${alias_path}.gz" "$alias_path"
     else
