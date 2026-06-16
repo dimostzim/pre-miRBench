@@ -872,7 +872,7 @@ def parse_args():
     parser.add_argument("--species", default=None, help="Comma-separated species codes to include. Default: all auto species in panel.")
     parser.add_argument("--heldout-species", default="dre,dme")
     parser.add_argument("--valid-frac", type=float, default=0.10)
-    parser.add_argument("--valid-heldout-family-frac", type=float, default=0.50)
+    parser.add_argument("--valid-heldout-family-frac", type=float, default=0.0)
     parser.add_argument("--test-known-species-known-family-frac", type=float, default=0.10)
     parser.add_argument("--test-known-species-heldout-family-frac", type=float, default=0.10)
     parser.add_argument("--ratio", type=float, default=5.0)

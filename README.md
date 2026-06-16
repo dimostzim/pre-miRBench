@@ -57,7 +57,7 @@ The dataset builder creates one validation split and four test splits:
 
 | Split | Meaning |
 | --- | --- |
-| `valid` | One model-selection split from known species. It can include known-family loci and validation-only held-out families. |
+| `valid` | Model-selection split from known species and known families. Exact pre-miRNA sequence is still held out. |
 | `test_known_species_known_family` | Species appears in train, and miRNA family appears in train. Exact pre-miRNA sequence is still held out. |
 | `test_known_species_heldout_family` | Species appears in train, but miRNA family is absent from train. |
 | `test_heldout_species_known_family` | Species is absent from train, but miRNA family appears in train. |
@@ -102,7 +102,7 @@ ten negative windows for each positive precursor.
 | `--species` | all auto species | Comma-separated species codes to include, for example `hsa,mmu,dre`. |
 | `--heldout-species` | `dre,dme` | Comma-separated species absent from train. |
 | `--valid-frac` | `0.10` | Fraction of known-species positives targeted for validation. |
-| `--valid-heldout-family-frac` | `0.50` | Fraction of validation positives targeted from validation-only held-out families. |
+| `--valid-heldout-family-frac` | `0.0` | Fraction of validation positives targeted from validation-only held-out families. Default keeps validation train-like. |
 | `--test-known-species-known-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/known-family test. |
 | `--test-known-species-heldout-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/held-out-family test. |
 | `--ratio` | `5` | Negative:positive ratio. Use `10` for 1:10. |

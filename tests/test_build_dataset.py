@@ -2,6 +2,7 @@ import importlib.util
 import os
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 def load_build_dataset_module(repo_root):
@@ -45,6 +46,12 @@ class BuildDatasetSplitTest(unittest.TestCase):
         self.assertEqual(parser("Dre-Mir-430-o1a_pre"), "Mir-430")
         self.assertEqual(parser("Hsa-Let-7-P2b1_pre"), "Let-7")
         self.assertEqual(parser("Dme-Iab-4-as_pre"), "Iab-4")
+
+    def test_validation_heldout_family_default_is_train_like(self):
+        with patch("sys.argv", ["build_dataset.py"]):
+            args = self.build_dataset.parse_args()
+
+        self.assertEqual(args.valid_heldout_family_frac, 0.0)
 
     def test_heldout_species_exact_precursor_overlap_is_excluded(self):
         rows, excluded = self.build_dataset.assign_positive_splits(
