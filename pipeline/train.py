@@ -110,8 +110,8 @@ def default_tool_config(tool, dataset_dir):
         return {
             "positiveIntervals": dataset_file(dataset_dir, "mustard", "positive.bed"),
             "negativeIntervals": dataset_file(dataset_dir, "mustard", "negative.bed"),
-            "testPositiveIntervals": dataset_file(dataset_dir, "mustard", "test_chrom_positive.bed"),
-            "testNegativeIntervals": dataset_file(dataset_dir, "mustard", "test_chrom_negative.bed"),
+            "testPositiveIntervals": dataset_file(dataset_dir, "mustard", "validation_positive.bed"),
+            "testNegativeIntervals": dataset_file(dataset_dir, "mustard", "validation_negative.bed"),
             "validationPositiveIntervals": dataset_file(dataset_dir, "mustard", "validation_positive.bed"),
             "validationNegativeIntervals": dataset_file(dataset_dir, "mustard", "validation_negative.bed"),
             "genome": os.path.join(dataset_dir, "genome.fa").replace(os.sep, "/"),

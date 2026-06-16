@@ -101,10 +101,10 @@ class EvaluateTest(unittest.TestCase):
         wrote = self.evaluate.write_auprc_bar_plot(
             path,
             [
-                {"tool": "deepmir", "split": "test_chrom", "auprc": 0.81234},
-                {"tool": "deepmir", "split": "test_species", "auprc": 0.71234},
-                {"tool": "mirdnn", "split": "test_chrom", "auprc": 0.9},
-                {"tool": "mirdnn", "split": "test_species", "auprc": 0.8},
+                {"tool": "deepmir", "split": "test_known_species_known_family", "auprc": 0.81234},
+                {"tool": "deepmir", "split": "test_heldout_species_known_family", "auprc": 0.71234},
+                {"tool": "mirdnn", "split": "test_known_species_known_family", "auprc": 0.9},
+                {"tool": "mirdnn", "split": "test_heldout_species_known_family", "auprc": 0.8},
             ],
         )
 
@@ -113,8 +113,8 @@ class EvaluateTest(unittest.TestCase):
         self.assertIn("<svg", text)
         self.assertIn("AUPRC by Tool", text)
         self.assertIn(">Tool</text>", text)
-        self.assertIn("Test set", text)
-        self.assertIn("Left-out set", text)
+        self.assertIn("Known species / Known family", text)
+        self.assertIn("Held-out species / Known family", text)
         self.assertIn("deepmir", text)
         self.assertIn("mirdnn", text)
         self.assertIn("0.812", text)
@@ -124,8 +124,8 @@ class EvaluateTest(unittest.TestCase):
         wrote = self.evaluate.write_auprc_bar_plot_png(
             path,
             [
-                {"tool": "deepmir", "split": "test_chrom", "auprc": 0.81234},
-                {"tool": "deepmir", "split": "test_species", "auprc": 0.71234},
+                {"tool": "deepmir", "split": "test_known_species_known_family", "auprc": 0.81234},
+                {"tool": "deepmir", "split": "test_heldout_species_known_family", "auprc": 0.71234},
             ],
         )
         if not wrote:

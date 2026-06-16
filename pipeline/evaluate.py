@@ -18,14 +18,23 @@ from pathlib import Path
 
 TOOLS = ("deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e", "mustard")
 FASTA_TOOLS = {"deepmir", "deepmirgene", "dnnpremir", "mirdnn", "mire2e"}
-DEFAULT_SPLITS = ("test_chrom", "test_species")
+DEFAULT_SPLITS = (
+    "test_known_species_known_family",
+    "test_known_species_heldout_family",
+    "test_heldout_species_known_family",
+    "test_heldout_species_heldout_family",
+)
 SPLIT_LABELS = {
-    "test_chrom": "Test set",
-    "test_species": "Left-out set",
+    "test_known_species_known_family": "Known species / Known family",
+    "test_known_species_heldout_family": "Known species / Held-out family",
+    "test_heldout_species_known_family": "Held-out species / Known family",
+    "test_heldout_species_heldout_family": "Held-out species / Held-out family",
 }
 SPLIT_COLORS = {
-    "test_chrom": "#2f6fbd",
-    "test_species": "#d7832f",
+    "test_known_species_known_family": "#2f6fbd",
+    "test_known_species_heldout_family": "#6b8f3a",
+    "test_heldout_species_known_family": "#d7832f",
+    "test_heldout_species_heldout_family": "#9f5f80",
 }
 
 

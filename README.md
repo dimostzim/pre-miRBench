@@ -53,6 +53,21 @@ python pipeline/build_dataset.py \
   --species-jobs 12
 ```
 
+The dataset builder creates one validation split and four test splits:
+
+| Split | Meaning |
+| --- | --- |
+| `valid` | One model-selection split from known species. It can include known-family loci and validation-only held-out families. |
+| `test_known_species_known_family` | Species appears in train, and miRNA family appears in train. Exact pre-miRNA sequence is still held out. |
+| `test_known_species_heldout_family` | Species appears in train, but miRNA family is absent from train. |
+| `test_heldout_species_known_family` | Species is absent from train, but miRNA family appears in train. |
+| `test_heldout_species_heldout_family` | Species is absent from train, and miRNA family is absent from train. |
+
+No non-train positive row is allowed to share the exact annotated pre-miRNA
+sequence with train. Known-species duplicates are moved back to train when that
+does not break the split definition; held-out-species duplicates are excluded
+from evaluation.
+
 Build Docker images:
 
 ```bash
@@ -85,7 +100,11 @@ ten negative windows for each positive precursor.
 | `--output-dir` | `data/datasets/diverse20` | Final dataset, combined genome, split summary, and per-tool inputs. |
 | `--work-dir` | `data/work/build_dataset` | Intermediate per-species files. |
 | `--species` | all auto species | Comma-separated species codes to include, for example `hsa,mmu,dre`. |
-| `--heldout-species` | `dre,dme` | Comma-separated species held out for the species test split. |
+| `--heldout-species` | `dre,dme` | Comma-separated species absent from train. |
+| `--valid-frac` | `0.10` | Fraction of known-species positives targeted for validation. |
+| `--valid-heldout-family-frac` | `0.50` | Fraction of validation positives targeted from validation-only held-out families. |
+| `--test-known-species-known-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/known-family test. |
+| `--test-known-species-heldout-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/held-out-family test. |
 | `--ratio` | `5` | Negative:positive ratio. Use `10` for 1:10. |
 | `--window` | `200` | Sequence window length around each precursor. |
 | `--step` | `50` | Sliding-window step used when scanning candidate negatives. |
@@ -134,7 +153,7 @@ used later by evaluation.
 | `--run-name` | latest/required by outputs | Training run name to evaluate. |
 | `--output-dir` | `results/evaluation/<run-name>` | Evaluation output directory. |
 | `--tools` | all tools | Comma-separated tools to evaluate. |
-| `--splits` | all held-out splits | Comma-separated splits to evaluate. |
+| `--splits` | all four test splits | Comma-separated splits to evaluate. |
 | `--skip-inference` | off | Parse existing raw outputs without rerunning Docker. |
 | `--resume` | off | Reuse non-empty raw output directories instead of rerunning inference. |
 | `--allow-missing` | off | Skip tools whose trained `inference_config.yaml` is missing. |

@@ -27,6 +27,7 @@ METADATA_FIELDS = [
     "record_id",
     "species",
     "split",
+    "split_reason",
     "label",
     "window_id",
     "chrom",
@@ -38,6 +39,8 @@ METADATA_FIELDS = [
     "source_length",
     "prepared_length",
     "mirna_id",
+    "family_id",
+    "precursor_sequence",
     "target_start",
     "target_end",
     "left_trim",
@@ -105,6 +108,7 @@ def prepare_row(row, tool, target_length):
         "record_id": row["record_id"],
         "species": row.get("species", ""),
         "split": split_name(row.get("split")),
+        "split_reason": row.get("split_reason", ""),
         "label": label_name(row["label"]),
         "window_id": row["window_id"],
         "chrom": row["chrom"],
@@ -116,6 +120,8 @@ def prepare_row(row, tool, target_length):
         "source_length": len(sequence),
         "prepared_length": len(prepared_sequence),
         "mirna_id": row.get("mirna_id", ""),
+        "family_id": row.get("family_id", ""),
+        "precursor_sequence": row.get("precursor_sequence", ""),
         "target_start": row.get("target_start", ""),
         "target_end": row.get("target_end", ""),
         "left_trim": left,
@@ -166,9 +172,10 @@ def write_split_files(output_dir, rows):
     split_prefixes = {
         "train": "",
         "valid": "validation_",
-        "test": "test_",
-        "test_chrom": "test_chrom_",
-        "test_species": "test_species_",
+        "test_known_species_known_family": "test_known_species_known_family_",
+        "test_known_species_heldout_family": "test_known_species_heldout_family_",
+        "test_heldout_species_known_family": "test_heldout_species_known_family_",
+        "test_heldout_species_heldout_family": "test_heldout_species_heldout_family_",
     }
     for split, prefix in split_prefixes.items():
         split_rows = [row for row in rows if row["split"] == split]

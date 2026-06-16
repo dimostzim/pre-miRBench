@@ -3,16 +3,16 @@
 Build a prefixed multi-species training dataset.
 
 Each species genome/BED is rewritten with species-prefixed contig names before
-window extraction, so chromosome names are globally unique for MuStARD and split
-assignment. The default split holds out two complete species, plus one
-test chromosome and one validation chromosome per remaining species when enough
-positive-bearing chromosomes exist.
+window extraction, so chromosome names are globally unique for MuStARD. Splits
+are assigned globally by species and miRNA family so benchmark sets can separate
+known-species/held-out-species and known-family/held-out-family generalization.
 """
 import argparse
 import csv
 import math
 import os
 import random
+import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -23,10 +23,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "dataset"))
 from prepare_tool_inputs import DEFAULT_TARGET_LENGTHS, prepare_tool_inputs
 
 
+TEST_SPLITS = (
+    "test_known_species_known_family",
+    "test_known_species_heldout_family",
+    "test_heldout_species_known_family",
+    "test_heldout_species_heldout_family",
+)
+FINAL_SPLITS = ("train", "valid", *TEST_SPLITS)
+
 FIELDNAMES = [
     "record_id",
     "species",
     "split",
+    "split_reason",
     "window_id",
     "chrom",
     "start",
@@ -36,6 +45,8 @@ FIELDNAMES = [
     "structure",
     "mfe",
     "mirna_id",
+    "family_id",
+    "precursor_sequence",
     "target_start",
     "target_end",
     "label",
@@ -158,59 +169,281 @@ def unique_rows_by_window(rows):
     return list(unique.values())
 
 
-def choose_holdout_chroms(positives, negatives, species, heldout_species, ratio):
-    if species in heldout_species:
-        return "", "", []
-    positive_counts = Counter(row["chrom"] for row in positives)
-    negative_counts = Counter(row["chrom"] for row in unique_rows_by_window(negatives))
-    ranked = [chrom for chrom, _count in sorted(positive_counts.items(), key=lambda item: (-item[1], item[0]))]
-    skipped = []
-    eligible = []
-    for chrom in ranked:
-        required = math.ceil(positive_counts[chrom] * ratio)
-        available = negative_counts[chrom]
-        if available >= required:
-            eligible.append(chrom)
-        else:
-            skipped.append(
-                f"{chrom}: holdout skipped, needs {required} negatives for "
-                f"{positive_counts[chrom]} positives but has {available}"
-            )
-
-    issues = []
-    if skipped:
-        examples = "; ".join(skipped[:5])
-        suffix = f"; +{len(skipped) - 5} more" if len(skipped) > 5 else ""
-        issues.append(f"{len(skipped)} chromosomes/scaffolds ineligible for holdout ({examples}{suffix})")
-
-    # Keep the largest positive-bearing chromosome in training when possible.
-    train_anchor = ranked[0] if ranked else None
-    holdout_candidates = [chrom for chrom in eligible if chrom != train_anchor]
-    if len(holdout_candidates) >= 2:
-        return holdout_candidates[0], holdout_candidates[1], issues
-    if len(holdout_candidates) == 1:
-        return holdout_candidates[0], "", issues
-    return "", "", issues
+def parse_csv_set(value):
+    return {item.strip() for item in str(value or "").split(",") if item.strip()}
 
 
-def split_for_row(row, species, heldout_species, test_chrom, valid_chrom):
-    if species in heldout_species:
-        return "test_species"
-    if test_chrom and row["chrom"] == test_chrom:
-        return "test_chrom"
-    if valid_chrom and row["chrom"] == valid_chrom:
-        return "valid"
-    return "train"
+def normalize_sequence(sequence):
+    return str(sequence or "").strip().upper().replace("T", "U")
 
 
-def group_by_split(rows, species, heldout_species, test_chrom, valid_chrom):
+def family_id_from_mirna_id(mirna_id):
+    name = str(mirna_id or "").replace("_pre", "")
+    name = re.sub(r"^[A-Za-z]{3}-", "", name)
+    if name.startswith("Let-7"):
+        return "Let-7"
+
+    mir_match = re.match(r"Mir-(\d+)", name)
+    if mir_match:
+        return f"Mir-{mir_match.group(1)}"
+
+    numbered_match = re.match(r"([A-Za-z]+-\d+)", name)
+    if numbered_match:
+        return numbered_match.group(1)
+
+    return re.sub(r"-(P\d+[A-Za-z]?\d*|v\d+).*$", "", name)
+
+
+def precursor_sequence_for_row(row):
+    if not row.get("target_start") or not row.get("target_end"):
+        return ""
+
+    sequence = normalize_sequence(row["sequence"])
+    window_start = int(row["start"])
+    window_end = int(row["end"])
+    target_start = int(row["target_start"])
+    target_end = int(row["target_end"])
+    if row.get("strand") == "-":
+        left = window_end - target_end
+        right = window_end - target_start
+    else:
+        left = target_start - window_start
+        right = target_end - window_start
+
+    if left < 0 or right > len(sequence) or left >= right:
+        raise ValueError(
+            f"Invalid precursor bounds for {row.get('mirna_id', row.get('window_id'))}: "
+            f"window={window_start}-{window_end} target={target_start}-{target_end} "
+            f"strand={row.get('strand')} sequence_length={len(sequence)}"
+        )
+    return sequence[left:right]
+
+
+def annotate_positive(row, species):
+    row = row.copy()
+    row["species"] = species
+    row["family_id"] = family_id_from_mirna_id(row.get("mirna_id"))
+    row["precursor_sequence"] = precursor_sequence_for_row(row)
+    row["split"] = ""
+    row["split_reason"] = ""
+    row["label"] = "1"
+    return row
+
+
+def annotate_negative(row, species):
+    row = row.copy()
+    row["species"] = species
+    row["family_id"] = ""
+    row["precursor_sequence"] = ""
+    row["split"] = ""
+    row["split_reason"] = ""
+    row["label"] = "0"
+    return row
+
+
+def grouped_by_family(rows):
     grouped = defaultdict(list)
     for row in rows:
-        row = row.copy()
-        row["species"] = species
-        row["split"] = split_for_row(row, species, heldout_species, test_chrom, valid_chrom)
-        grouped[row["split"]].append(row)
+        grouped[row["family_id"]].append(row)
     return grouped
+
+
+def select_families_by_target(rows, target_rows, seed, excluded_families=None):
+    if target_rows <= 0:
+        return set()
+    excluded_families = excluded_families or set()
+    candidates = [
+        (family_id, family_rows)
+        for family_id, family_rows in grouped_by_family(rows).items()
+        if family_id and family_id not in excluded_families
+    ]
+    random.Random(seed).shuffle(candidates)
+
+    selected = set()
+    selected_rows = 0
+    for family_id, family_rows in candidates:
+        if selected_rows >= target_rows:
+            break
+        selected.add(family_id)
+        selected_rows += len(family_rows)
+    return selected
+
+
+def precursor_groups_by_family(rows):
+    grouped = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        grouped[row["family_id"]][row["precursor_sequence"]].append(row)
+    return grouped
+
+
+def select_precursor_groups_by_target(rows, target_rows, seed, assigned_groups=None):
+    if target_rows <= 0:
+        return set()
+    assigned_groups = assigned_groups or set()
+    grouped = precursor_groups_by_family(rows)
+    remaining_counts = {
+        family_id: sum(1 for precursor in groups if (family_id, precursor) not in assigned_groups)
+        for family_id, groups in grouped.items()
+    }
+    candidates = []
+    for family_id, groups in grouped.items():
+        if remaining_counts[family_id] <= 1:
+            continue
+        for precursor, precursor_rows in groups.items():
+            key = (family_id, precursor)
+            if key not in assigned_groups:
+                candidates.append((family_id, precursor, precursor_rows))
+
+    random.Random(seed).shuffle(candidates)
+    selected = set()
+    selected_rows = 0
+    for family_id, precursor, precursor_rows in candidates:
+        if selected_rows >= target_rows:
+            break
+        if remaining_counts[family_id] <= 1:
+            continue
+        selected.add((family_id, precursor))
+        remaining_counts[family_id] -= 1
+        selected_rows += len(precursor_rows)
+    return selected
+
+
+def assign_positive_splits(positives, args):
+    heldout_species = parse_csv_set(args.heldout_species)
+    known_species_rows = [row for row in positives if row["species"] not in heldout_species]
+    heldout_species_families = {row["family_id"] for row in positives if row["species"] in heldout_species}
+
+    valid_target = math.ceil(len(known_species_rows) * args.valid_frac)
+    valid_heldout_family_target = math.ceil(valid_target * args.valid_heldout_family_frac)
+    test_known_family_target = math.ceil(len(known_species_rows) * args.test_known_species_known_family_frac)
+    test_heldout_family_target = math.ceil(len(known_species_rows) * args.test_known_species_heldout_family_frac)
+
+    # Validation-only held-out families are kept out of final held-out species tests.
+    valid_heldout_family_candidates = [
+        row for row in known_species_rows if row["family_id"] not in heldout_species_families
+    ]
+    valid_heldout_families = select_families_by_target(
+        valid_heldout_family_candidates,
+        valid_heldout_family_target,
+        args.seed + 101,
+    )
+    test_heldout_families = select_families_by_target(
+        known_species_rows,
+        test_heldout_family_target,
+        args.seed + 202,
+        excluded_families=valid_heldout_families,
+    )
+
+    train_candidate_rows = [
+        row
+        for row in known_species_rows
+        if row["family_id"] not in valid_heldout_families
+        and row["family_id"] not in test_heldout_families
+    ]
+    if known_species_rows and not train_candidate_rows:
+        family_counts = Counter(row["family_id"] for row in known_species_rows)
+        family_to_keep, _count = family_counts.most_common(1)[0]
+        valid_heldout_families.discard(family_to_keep)
+        test_heldout_families.discard(family_to_keep)
+        train_candidate_rows = [
+            row
+            for row in known_species_rows
+            if row["family_id"] not in valid_heldout_families
+            and row["family_id"] not in test_heldout_families
+        ]
+    valid_known_target = max(0, valid_target - sum(1 for row in known_species_rows if row["family_id"] in valid_heldout_families))
+    valid_known_groups = select_precursor_groups_by_target(
+        train_candidate_rows,
+        valid_known_target,
+        args.seed + 303,
+    )
+    test_known_groups = select_precursor_groups_by_target(
+        train_candidate_rows,
+        test_known_family_target,
+        args.seed + 404,
+        assigned_groups=valid_known_groups,
+    )
+
+    assigned = []
+    for row in positives:
+        row = row.copy()
+        family_id = row["family_id"]
+        precursor_key = (family_id, row["precursor_sequence"])
+        if row["species"] in heldout_species:
+            row["split"] = ""
+            row["split_reason"] = "heldout_species_pending"
+        elif family_id in valid_heldout_families:
+            row["split"] = "valid"
+            row["split_reason"] = "known_species_heldout_family"
+        elif family_id in test_heldout_families:
+            row["split"] = "test_known_species_heldout_family"
+            row["split_reason"] = "known_species_heldout_family"
+        elif precursor_key in valid_known_groups:
+            row["split"] = "valid"
+            row["split_reason"] = "known_species_known_family"
+        elif precursor_key in test_known_groups:
+            row["split"] = "test_known_species_known_family"
+            row["split_reason"] = "known_species_known_family"
+        else:
+            row["split"] = "train"
+            row["split_reason"] = "train"
+        assigned.append(row)
+
+    train_families = {row["family_id"] for row in assigned if row["split"] == "train"}
+    for row in assigned:
+        if row["split"]:
+            continue
+        if row["family_id"] in train_families:
+            row["split"] = "test_heldout_species_known_family"
+            row["split_reason"] = "heldout_species_known_family"
+        else:
+            row["split"] = "test_heldout_species_heldout_family"
+            row["split_reason"] = "heldout_species_heldout_family"
+
+    return enforce_no_eval_precursor_overlap(assigned, heldout_species)
+
+
+def enforce_no_eval_precursor_overlap(rows, heldout_species):
+    rows = [row.copy() for row in rows]
+    excluded = []
+    movable_reasons = {"known_species_known_family"}
+
+    while True:
+        train_precursors = {
+            row["precursor_sequence"]
+            for row in rows
+            if row["split"] == "train" and row.get("precursor_sequence")
+        }
+        overlapping = [
+            row
+            for row in rows
+            if row["split"] != "train"
+            and row.get("precursor_sequence")
+            and row["precursor_sequence"] in train_precursors
+        ]
+        if not overlapping:
+            break
+
+        moved = False
+        kept = []
+        for row in rows:
+            if row not in overlapping:
+                kept.append(row)
+                continue
+            if row["species"] not in heldout_species and row["split_reason"] in movable_reasons:
+                row = row.copy()
+                row["split"] = "train"
+                row["split_reason"] = "exact_precursor_overlap_moved_to_train"
+                kept.append(row)
+                moved = True
+            else:
+                row = row.copy()
+                row["split_reason"] = "exact_precursor_overlap_excluded"
+                excluded.append(row)
+        rows = kept
+        if not moved and not excluded:
+            break
+    return rows, excluded
 
 
 def assign_final_records(rows, species, label, start_index):
@@ -224,10 +457,10 @@ def assign_final_records(rows, species, label, start_index):
     return output
 
 
-def select_negatives_for_split(positives, hard_negatives, scored_negatives, ratio, seed):
+def select_negatives_for_split(positives, hard_negatives, scored_negatives, ratio, seed, used_windows=None):
     target = math.ceil(len(positives) * ratio)
     chosen = []
-    seen = set()
+    seen = set(used_windows or set())
 
     def add_rows(rows):
         for row in rows:
@@ -261,8 +494,7 @@ def select_negatives_for_split(positives, hard_negatives, scored_negatives, rati
 def write_split_summary(path, rows):
     fieldnames = [
         "species",
-        "test_chrom",
-        "valid_chrom",
+        "is_heldout_species",
         "bed_rows",
         "bed_matched_rows",
         "bed_dropped_rows",
@@ -276,19 +508,202 @@ def write_split_summary(path, rows):
         "negative_hairpin_like_kept",
         "negative_overlap_skipped",
         "negative_repeat_or_n_skipped",
+        "input_positives",
+        "input_negative_windows",
+        "excluded_pos",
         "positives",
         "negatives",
-        "train_pos",
-        "train_neg",
-        "valid_pos",
-        "valid_neg",
-        "test_chrom_pos",
-        "test_chrom_neg",
-        "test_species_pos",
-        "test_species_neg",
+        *[f"{split}_pos" for split in FINAL_SPLITS],
+        *[f"{split}_neg" for split in FINAL_SPLITS],
         "issues",
     ]
     write_csv(path, rows, fieldnames=fieldnames)
+
+
+def split_positive_counts(rows):
+    return Counter((row["species"], row["split"]) for row in rows if row["label"] == "1")
+
+
+def finalize_records(rows):
+    counters = Counter()
+    finalized = []
+    for row in rows:
+        row = row.copy()
+        label = "1" if str(row.get("label")) == "1" else "0"
+        counters[(row["species"], label)] += 1
+        stem = "pos" if label == "1" else "neg"
+        row["record_id"] = f"{row['species']}_{stem}_{counters[(row['species'], label)]:06d}"
+        row["label"] = label
+        finalized.append(row)
+    return finalized
+
+
+def select_species_negatives(species_result, split_positives_by_split, args):
+    hard_negatives = species_result["hard_negatives"]
+    scored_negatives = species_result["scored_negatives"]
+    used_windows = set()
+    selected = []
+    issues = []
+
+    for split_index, split in enumerate(FINAL_SPLITS):
+        positives = split_positives_by_split.get(split, [])
+        if not positives:
+            continue
+        split_negatives, shortfall = select_negatives_for_split(
+            positives,
+            hard_negatives,
+            scored_negatives,
+            args.ratio,
+            args.seed + species_result["species_index"] * 1000 + split_index,
+            used_windows=used_windows,
+        )
+        for row in split_negatives:
+            used_windows.add(row["window_id"])
+            row = row.copy()
+            row["split"] = split
+            row["split_reason"] = "negative"
+            selected.append(row)
+        if shortfall > 0:
+            requested = math.ceil(len(positives) * args.ratio)
+            issues.append(
+                f"{split}: requested {requested} negatives for "
+                f"{len(positives)} positives but selected {len(split_negatives)}"
+            )
+    return selected, issues
+
+
+def write_family_split_summary(path, rows, heldout_species):
+    train_families = {row["family_id"] for row in rows if row["split"] == "train" and row["label"] == "1"}
+    train_precursors = {
+        row["precursor_sequence"]
+        for row in rows
+        if row["split"] == "train" and row["label"] == "1" and row.get("precursor_sequence")
+    }
+
+    summary_rows = []
+    for split in FINAL_SPLITS:
+        split_rows = [row for row in rows if row["split"] == split]
+        positive_rows = [row for row in split_rows if row["label"] == "1"]
+        negative_rows = [row for row in split_rows if row["label"] == "0"]
+        summary_rows.append(
+            {
+                "split": split,
+                "positives": len(positive_rows),
+                "negatives": len(negative_rows),
+                "species_count": len({row["species"] for row in positive_rows}),
+                "family_count": len({row["family_id"] for row in positive_rows}),
+                "known_species_positives": sum(1 for row in positive_rows if row["species"] not in heldout_species),
+                "heldout_species_positives": sum(1 for row in positive_rows if row["species"] in heldout_species),
+                "known_family_positives": sum(1 for row in positive_rows if row["family_id"] in train_families),
+                "heldout_family_positives": sum(1 for row in positive_rows if row["family_id"] not in train_families),
+                "exact_precursor_overlap_with_train": (
+                    0
+                    if split == "train"
+                    else sum(1 for row in positive_rows if row.get("precursor_sequence") in train_precursors)
+                ),
+            }
+        )
+
+    fieldnames = [
+        "split",
+        "positives",
+        "negatives",
+        "species_count",
+        "family_count",
+        "known_species_positives",
+        "heldout_species_positives",
+        "known_family_positives",
+        "heldout_family_positives",
+        "exact_precursor_overlap_with_train",
+    ]
+    write_csv(path, summary_rows, fieldnames=fieldnames)
+
+
+def validate_split_guarantees(rows, heldout_species):
+    train_positive_rows = [row for row in rows if row["split"] == "train" and row["label"] == "1"]
+    train_families = {row["family_id"] for row in train_positive_rows}
+    train_precursors = {row["precursor_sequence"] for row in train_positive_rows if row.get("precursor_sequence")}
+    issues = []
+
+    for row in rows:
+        if row["label"] != "1":
+            continue
+        split = row["split"]
+        if split != "train" and row.get("precursor_sequence") in train_precursors:
+            issues.append(f"{row.get('mirna_id', row.get('record_id'))}: exact precursor overlaps train")
+        if split.startswith("test_known_species") and row["species"] in heldout_species:
+            issues.append(f"{row.get('mirna_id', row.get('record_id'))}: held-out species in known-species split")
+        if split.startswith("test_heldout_species") and row["species"] not in heldout_species:
+            issues.append(f"{row.get('mirna_id', row.get('record_id'))}: known species in held-out-species split")
+        if split.endswith("heldout_family") and row["family_id"] in train_families:
+            issues.append(f"{row.get('mirna_id', row.get('record_id'))}: train family in held-out-family split")
+        if split.endswith("known_family") and row["family_id"] not in train_families:
+            issues.append(f"{row.get('mirna_id', row.get('record_id'))}: held-out family in known-family split")
+
+    if issues:
+        examples = "\n".join(f"  - {issue}" for issue in issues[:20])
+        suffix = f"\n  ... {len(issues) - 20} more" if len(issues) > 20 else ""
+        raise ValueError(f"Split guarantee validation failed:\n{examples}{suffix}")
+
+
+def assemble_dataset_rows(results, args):
+    positives = []
+    for result in results:
+        positives.extend(result["positives"])
+
+    positive_rows, excluded_positive_rows = assign_positive_splits(positives, args)
+    positives_by_species_split = defaultdict(lambda: defaultdict(list))
+    for row in positive_rows:
+        positives_by_species_split[row["species"]][row["split"]].append(row)
+
+    negatives = []
+    issues_by_species = defaultdict(list)
+    result_by_species = {result["species"]: result for result in results}
+    for species, split_map in positives_by_species_split.items():
+        split_negatives, issues = select_species_negatives(result_by_species[species], split_map, args)
+        negatives.extend(split_negatives)
+        issues_by_species[species].extend(issues)
+
+    rows = []
+    split_order = {split: index for index, split in enumerate(FINAL_SPLITS)}
+    for species in sorted(result_by_species, key=lambda value: result_by_species[value]["species_index"]):
+        species_positives = [row for row in positive_rows if row["species"] == species]
+        species_negatives = [row for row in negatives if row["species"] == species]
+        species_rows = species_positives + species_negatives
+        rows.extend(
+            sorted(
+                species_rows,
+                key=lambda row: (
+                    split_order.get(row["split"], 999),
+                    row["label"],
+                    row.get("chrom", ""),
+                    int(row.get("start") or 0),
+                    row.get("mirna_id", ""),
+                    row.get("window_id", ""),
+                ),
+            )
+        )
+
+    final_rows = finalize_records(rows)
+    validate_split_guarantees(final_rows, parse_csv_set(args.heldout_species))
+    counts = Counter((row["species"], row["split"], row["label"]) for row in final_rows)
+    excluded_counts = Counter(row["species"] for row in excluded_positive_rows)
+    for result in results:
+        species = result["species"]
+        summary = result["summary"]
+        summary["excluded_pos"] = excluded_counts[species]
+        summary["positives"] = sum(counts[(species, split, "1")] for split in FINAL_SPLITS)
+        summary["negatives"] = sum(counts[(species, split, "0")] for split in FINAL_SPLITS)
+        for split in FINAL_SPLITS:
+            summary[f"{split}_pos"] = counts[(species, split, "1")]
+            summary[f"{split}_neg"] = counts[(species, split, "0")]
+        issue_parts = []
+        if excluded_counts[species]:
+            issue_parts.append(f"excluded {excluded_counts[species]} positives with exact precursor overlap to train")
+        issue_parts.extend(issues_by_species[species])
+        summary["issues"] = "; ".join(issue_parts)
+
+    return final_rows, excluded_positive_rows
 
 
 def process_species(species_index, species_count, species_row, args, script_dir, python_exe, mining_jobs):
@@ -409,55 +824,15 @@ def process_species(species_index, species_count, species_row, args, script_dir,
     )
 
     heldout_species = {item.strip() for item in args.heldout_species.split(",") if item.strip()}
-    positives = read_csv(positives_csv)
     positives_stats = read_stats(positives_stats_csv)
     pool_stats = read_stats(pool_stats_csv)
-    hard_negatives = read_csv(hard_csv)
-    scored_negatives = read_csv(scores_csv)
-    negative_pool = unique_rows_by_window(hard_negatives + scored_negatives)
-    test_chrom, valid_chrom, holdout_issues = choose_holdout_chroms(
-        positives,
-        negative_pool,
-        species,
-        heldout_species,
-        args.ratio,
-    )
+    positives = [annotate_positive(row, species) for row in read_csv(positives_csv)]
+    hard_negatives = [annotate_negative(row, species) for row in read_csv(hard_csv)]
+    scored_negatives = [annotate_negative(row, species) for row in read_csv(scores_csv)]
 
-    positives_by_split = group_by_split(positives, species, heldout_species, test_chrom, valid_chrom)
-    hard_by_split = group_by_split(hard_negatives, species, heldout_species, test_chrom, valid_chrom)
-    scored_by_split = group_by_split(scored_negatives, species, heldout_species, test_chrom, valid_chrom)
-
-    species_rows = []
-    species_issues = list(holdout_issues)
-    pos_index = 1
-    neg_index = 1
-    for split in ("train", "valid", "test_chrom", "test_species"):
-        split_positives = positives_by_split.get(split, [])
-        if not split_positives:
-            continue
-        split_negatives, shortfall = select_negatives_for_split(
-            split_positives,
-            hard_by_split.get(split, []),
-            scored_by_split.get(split, []),
-            args.ratio,
-            args.seed + species_index,
-        )
-        if shortfall > 0:
-            requested = math.ceil(len(split_positives) * args.ratio)
-            species_issues.append(
-                f"{split}: requested {requested} negatives for "
-                f"{len(split_positives)} positives but selected {len(split_negatives)}"
-            )
-        species_rows.extend(assign_final_records(split_positives, species, 1, pos_index))
-        species_rows.extend(assign_final_records(split_negatives, species, 0, neg_index))
-        pos_index += len(split_positives)
-        neg_index += len(split_negatives)
-
-    counts = Counter((row["split"], row["label"]) for row in species_rows)
     summary_row = {
         "species": species,
-        "test_chrom": test_chrom,
-        "valid_chrom": valid_chrom,
+        "is_heldout_species": int(species in heldout_species),
         "bed_rows": species_row.get("bed_rows", ""),
         "bed_matched_rows": species_row.get("matched_rows", ""),
         "bed_dropped_rows": species_row.get("dropped_rows", ""),
@@ -471,23 +846,20 @@ def process_species(species_index, species_count, species_row, args, script_dir,
         "negative_hairpin_like_kept": pool_stats.get("hairpin_like_negatives_kept", ""),
         "negative_overlap_skipped": pool_stats.get("skipped_overlap", ""),
         "negative_repeat_or_n_skipped": pool_stats.get("skipped_repeat_or_n", ""),
-        "positives": sum(1 for row in species_rows if row["label"] == "1"),
-        "negatives": sum(1 for row in species_rows if row["label"] == "0"),
-        "train_pos": counts[("train", "1")],
-        "train_neg": counts[("train", "0")],
-        "valid_pos": counts[("valid", "1")],
-        "valid_neg": counts[("valid", "0")],
-        "test_chrom_pos": counts[("test_chrom", "1")],
-        "test_chrom_neg": counts[("test_chrom", "0")],
-        "test_species_pos": counts[("test_species", "1")],
-        "test_species_neg": counts[("test_species", "0")],
-        "issues": "; ".join(species_issues),
+        "input_positives": len(positives),
+        "input_negative_windows": len(unique_rows_by_window(hard_negatives + scored_negatives)),
+        "excluded_pos": 0,
+        "positives": 0,
+        "negatives": 0,
+        "issues": "",
     }
     return {
         "species_index": species_index,
         "species": species,
         "prefixed_genome": str(prefixed_genome),
-        "rows": species_rows,
+        "positives": positives,
+        "hard_negatives": hard_negatives,
+        "scored_negatives": scored_negatives,
         "summary": summary_row,
     }
 
@@ -499,6 +871,10 @@ def parse_args():
     parser.add_argument("--work-dir", default="data/work/build_dataset")
     parser.add_argument("--species", default=None, help="Comma-separated species codes to include. Default: all auto species in panel.")
     parser.add_argument("--heldout-species", default="dre,dme")
+    parser.add_argument("--valid-frac", type=float, default=0.10)
+    parser.add_argument("--valid-heldout-family-frac", type=float, default=0.50)
+    parser.add_argument("--test-known-species-known-family-frac", type=float, default=0.10)
+    parser.add_argument("--test-known-species-heldout-family-frac", type=float, default=0.10)
     parser.add_argument("--ratio", type=float, default=5.0)
     parser.add_argument("--window", type=int, default=200)
     parser.add_argument("--step", type=int, default=50)
@@ -534,6 +910,15 @@ def main():
     args = parse_args()
     if args.ratio <= 0:
         raise SystemExit("--ratio must be positive")
+    for name in (
+        "valid_frac",
+        "valid_heldout_family_frac",
+        "test_known_species_known_family_frac",
+        "test_known_species_heldout_family_frac",
+    ):
+        value = getattr(args, name)
+        if value < 0 or value > 1:
+            raise SystemExit(f"--{name.replace('_', '-')} must be between 0 and 1")
 
     script_dir = Path(__file__).resolve().parent / "dataset"
     work_dir = Path(args.work_dir)
@@ -548,7 +933,6 @@ def main():
     if combined_genome.exists():
         combined_genome.unlink()
 
-    all_rows = []
     summary_rows = []
     python_exe = sys.executable
     species_jobs = max(1, args.species_jobs)
@@ -596,20 +980,25 @@ def main():
 
     for result in sorted(results, key=lambda row: row["species_index"]):
         append_file(result["prefixed_genome"], combined_genome)
-        all_rows.extend(result["rows"])
         summary_rows.append(result["summary"])
 
+    all_rows, excluded_positive_rows = assemble_dataset_rows(results, args)
+    heldout_species = parse_csv_set(args.heldout_species)
     dataset_csv = output_dir / "dataset.csv"
     split_summary = output_dir / "split_summary.csv"
+    family_split_summary = output_dir / "family_split_summary.csv"
     write_csv(dataset_csv, all_rows)
     write_split_summary(split_summary, summary_rows)
+    write_family_split_summary(family_split_summary, all_rows, heldout_species)
     prepare_tool_inputs(all_rows, output_dir / "tool_inputs", target_lengths=DEFAULT_TARGET_LENGTHS)
 
     print("\nsummary")
     print(f"species: {len(panel_rows)}")
     print(f"records: {len(all_rows)}")
+    print(f"excluded positives: {len(excluded_positive_rows)}")
     print(f"dataset: {dataset_csv}")
     print(f"split summary: {split_summary}")
+    print(f"family split summary: {family_split_summary}")
     print(f"combined genome: {combined_genome}")
     print(f"tool inputs: {output_dir / 'tool_inputs'}")
     issue_rows = [row for row in summary_rows if row.get("issues")]
