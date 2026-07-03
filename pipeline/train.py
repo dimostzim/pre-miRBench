@@ -545,7 +545,7 @@ def main():
     parser = argparse.ArgumentParser(description="Retrain a pre-miRNA prediction tool in Docker.")
     parser.add_argument("--tool", required=True, choices=TOOLS)
     parser.add_argument("--run-name", required=True, help="Subdirectory under results/training/<tool>/")
-    parser.add_argument("--dataset-dir", default="data/datasets/diverse20")
+    parser.add_argument("--dataset-dir", default="data/datasets/mirgenedb_71")
     parser.add_argument("--config", help="Optional YAML file that overrides derived training defaults.")
     parser.add_argument(
         "--output-root",

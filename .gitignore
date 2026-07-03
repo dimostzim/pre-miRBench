@@ -8,6 +8,8 @@ data/raw/
 data/datasets/
 data/work/
 data/train/
+audits/
+species_audit*.tsv
 
 # generated outputs
 results/

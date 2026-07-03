@@ -866,11 +866,11 @@ def process_species(species_index, species_count, species_row, args, script_dir,
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Build a prefixed multi-species 1:N training dataset.")
-    parser.add_argument("--panel", default="data/raw/diverse20/panel.tsv")
-    parser.add_argument("--output-dir", default="data/datasets/diverse20")
-    parser.add_argument("--work-dir", default="data/work/build_dataset")
+    parser.add_argument("--panel", default="data/raw/mirgenedb_71/panel.tsv")
+    parser.add_argument("--output-dir", default="data/datasets/mirgenedb_71")
+    parser.add_argument("--work-dir", default="data/work/build_mirgenedb_71")
     parser.add_argument("--species", default=None, help="Comma-separated species codes to include. Default: all auto species in panel.")
-    parser.add_argument("--heldout-species", default="dre,dme")
+    parser.add_argument("--heldout-species", default="gga,dme")
     parser.add_argument("--valid-frac", type=float, default=0.10)
     parser.add_argument("--valid-heldout-family-frac", type=float, default=0.0)
     parser.add_argument("--test-known-species-known-family-frac", type=float, default=0.10)

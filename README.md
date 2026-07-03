@@ -18,6 +18,7 @@ conda activate premirbench
 - `pipeline/build_dataset.py` - build canonical train/validation/test splits and per-tool inputs
 - `pipeline/train.py` - train one tool image on the prepared dataset
 - `pipeline/evaluate.py` - evaluate trained tools on held-out splits
+- `panels/mirgenedb_71/` - final 71-species MirGeneDB panel manifest and supplement addenda
 - `tools/<tool>/` - Dockerfile plus tool-specific `train.py` and `inference.py` adapters
 - `tests/fixtures/` - small committed fixtures used by tests
 
@@ -36,6 +37,14 @@ Download the species panel:
 
 ```bash
 bash pipeline/download_data.sh
+```
+
+The default panel source is `panels/mirgenedb_71/species_panel.tsv`, and the
+default raw output is `data/raw/mirgenedb_71`. To smoke-test one or a few
+species before downloading everything:
+
+```bash
+SPECIES=hsa,mmu bash pipeline/download_data.sh
 ```
 
 Build the retraining dataset:
@@ -78,29 +87,29 @@ Train each tool:
 
 ```bash
 for tool in deepmir deepmirgene dnnpremir mirdnn mire2e mustard; do
-  python pipeline/train.py --tool "$tool" --run-name diverse20_gpu_1to5
+  python pipeline/train.py --tool "$tool" --run-name mirgenedb71_gpu_1to10
 done
 ```
 
 Evaluate trained tools:
 
 ```bash
-python pipeline/evaluate.py --run-name diverse20_gpu_1to5
+python pipeline/evaluate.py --run-name mirgenedb71_gpu_1to10
 ```
 
 ## Dataset Options
 
-`pipeline/build_dataset.py` builds `data/datasets/diverse20` from the downloaded
+`pipeline/build_dataset.py` builds `data/datasets/mirgenedb_71` from the downloaded
 species panel. `--ratio` is the negative:positive ratio, so `--ratio 10` means
 ten negative windows for each positive precursor.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--panel` | `data/raw/diverse20/panel.tsv` | Species manifest from `pipeline/download_data.sh`. |
-| `--output-dir` | `data/datasets/diverse20` | Final dataset, combined genome, split summary, and per-tool inputs. |
-| `--work-dir` | `data/work/build_dataset` | Intermediate per-species files. |
-| `--species` | all auto species | Comma-separated species codes to include, for example `hsa,mmu,dre`. |
-| `--heldout-species` | `dre,dme` | Comma-separated species absent from train. |
+| `--panel` | `data/raw/mirgenedb_71/panel.tsv` | Species manifest from `pipeline/download_data.sh`. |
+| `--output-dir` | `data/datasets/mirgenedb_71` | Final dataset, combined genome, split summary, and per-tool inputs. |
+| `--work-dir` | `data/work/build_mirgenedb_71` | Intermediate per-species files. |
+| `--species` | all auto species | Comma-separated species codes to include, for example `hsa,mmu,gga`. |
+| `--heldout-species` | `gga,dme` | Comma-separated species absent from train. |
 | `--valid-frac` | `0.10` | Fraction of known-species positives targeted for validation. |
 | `--valid-heldout-family-frac` | `0.0` | Fraction of validation positives targeted from validation-only held-out families. Default keeps validation train-like. |
 | `--test-known-species-known-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/known-family test. |
@@ -133,7 +142,7 @@ ten negative windows for each positive precursor.
 | --- | --- | --- |
 | `--tool` | required | Tool to train: `mustard`, `mire2e`, `mirdnn`, `dnnpremir`, `deepmir`, or `deepmirgene`. |
 | `--run-name` | required | Output subdirectory under `results/training/<tool>/`. |
-| `--dataset-dir` | `data/datasets/diverse20` | Dataset created by `pipeline/build_dataset.py`. |
+| `--dataset-dir` | `data/datasets/mirgenedb_71` | Dataset created by `pipeline/build_dataset.py`. |
 | `--config` | none | Optional YAML file overriding the derived tool training defaults. |
 | `--output-root` | `results/training` | Root directory for training outputs. Supports env vars such as `$SCRATCH`. |
 
@@ -148,7 +157,7 @@ used later by evaluation.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--dataset-dir` | `data/datasets/diverse20` | Dataset created by `pipeline/build_dataset.py`. |
+| `--dataset-dir` | `data/datasets/mirgenedb_71` | Dataset created by `pipeline/build_dataset.py`. |
 | `--training-root` | `results/training` | Root directory containing trained tool outputs. |
 | `--run-name` | latest/required by outputs | Training run name to evaluate. |
 | `--output-dir` | `results/evaluation/<run-name>` | Evaluation output directory. |

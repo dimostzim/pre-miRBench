@@ -787,9 +787,9 @@ def grouped_metric_rows(tool, split, rows):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate trained tools on held-out splits.")
-    parser.add_argument("--dataset-dir", default="data/datasets/diverse20")
+    parser.add_argument("--dataset-dir", default="data/datasets/mirgenedb_71")
     parser.add_argument("--training-root", default="results/training")
-    parser.add_argument("--run-name", default="diverse20_gpu_1to5")
+    parser.add_argument("--run-name", default="mirgenedb71_gpu_1to10")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--tools", default="all")
     parser.add_argument("--splits", default=",".join(DEFAULT_SPLITS))

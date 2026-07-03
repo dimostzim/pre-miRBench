@@ -39,11 +39,15 @@ def candidate_names(chrom):
 
 
 def mapped_chrom(chrom, genome_names, aliases):
+    if chrom in genome_names:
+        return chrom
     if chrom in aliases:
         return aliases[chrom]
     for candidate in candidate_names(chrom):
         if candidate in genome_names:
             return candidate
+        if candidate in aliases:
+            return aliases[candidate]
     return None
 
 
