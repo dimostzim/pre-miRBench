@@ -164,7 +164,7 @@ ensure_genome() {
     fi
 
     rm -f "$download_path" "${fasta}.tmp"
-    if ! curl -fsSL -o "$download_path" "$genome_url"; then
+    if ! curl --http1.1 --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -fL -o "$download_path" "$genome_url"; then
         rm -f "$download_path"
         echo "genome_download_failed"
         return 1
@@ -217,7 +217,7 @@ ensure_precursor_bed() {
     fi
 
     rm -f "$temp_bed" "$temp_pre" "$temp_merged"
-    if ! curl -fsSL -o "$temp_bed" "$bed_url"; then
+    if ! curl --http1.1 --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -fL -o "$temp_bed" "$bed_url"; then
         rm -f "$temp_bed"
         echo "mirgenedb_bed_download_failed"
         return 1
@@ -256,7 +256,7 @@ ensure_alias() {
     fi
 
     rm -f "$temp_alias"
-    if ! curl -fsSL -o "$temp_alias" "$alias_url" 2>/dev/null; then
+    if ! curl --http1.1 --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 30 -fL -o "$temp_alias" "$alias_url" 2>/dev/null; then
         rm -f "$temp_alias"
         return 0
     fi
