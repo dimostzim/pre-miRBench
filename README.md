@@ -77,7 +77,12 @@ The dataset builder creates one validation split and four test splits:
 The canonical leakage key is the exact prepared 100 nt sequence. No final row is
 allowed to share this key with any other final row, including train/validation,
 train/test, test/test, within-split duplicates, and positive/negative conflicts.
-Duplicate positives are collapsed before negative selection. Negatives are
+Positive rows are assigned to splits before de-duplication, then exact 100 nt
+duplicate positives are collapsed by keeping the row in the strictest split:
+`test_heldout_species_heldout_family`, `test_heldout_species_known_family`,
+`test_known_species_heldout_family`, `test_known_species_known_family`, `valid`,
+then `train`. Ties inside the same priority class are resolved deterministically
+by species, family, miRNA id, chromosome, start, and window id. Negatives are
 selected after the positive splits are fixed, using train positives for
 hard-negative mining, and each split is validated against the requested
 negative:positive ratio. The builder writes `leakage_report.csv` next to

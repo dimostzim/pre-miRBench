@@ -62,6 +62,14 @@ The canonical leakage key is the exact prepared 100 nt sequence. No final row
 shares that key with any other final row, including train/validation, train/test,
 test/test, within-split duplicates, or positive/negative conflicts.
 
+Positive de-duplication happened after positive split assignment. When multiple
+positive rows had the same exact 100 nt sequence, the retained row was chosen by
+split priority: `test_heldout_species_heldout_family`,
+`test_heldout_species_known_family`, `test_known_species_heldout_family`,
+`test_known_species_known_family`, `valid`, then `train`. This preserves the
+strictest evaluation copy when a duplicate sequence appears in more than one
+split. The 2026-07-04 build excluded 1,259 duplicate positive rows by this rule.
+
 The build stdout was not captured to a persistent log file. Persistent run
 artifacts are the raw `panel.tsv`, per-species normalization reports,
 per-species BED/genome validation reports, per-species build stats, final split
