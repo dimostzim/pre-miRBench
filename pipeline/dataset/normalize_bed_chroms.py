@@ -1,6 +1,30 @@
 #!/usr/bin/env python3
 import argparse
 from collections import Counter
+import re
+
+
+GENERIC_ALIAS_VALUES = {
+    "",
+    "=",
+    "<>",
+    "assembled-molecule",
+    "Chromosome",
+    "Linkage Group",
+    "Mitochondrion",
+    "na",
+    "Primary Assembly",
+    "unlocalized-scaffold",
+    "unplaced-scaffold",
+}
+
+
+def strip_version(name):
+    return re.sub(r"\.\d+$", "", name)
+
+
+def clean_alias(value):
+    return value.strip().strip(",;")
 
 
 def fasta_headers(path):
@@ -12,29 +36,96 @@ def fasta_headers(path):
     return headers
 
 
+def add_alias(aliases, alias, genome_name):
+    alias = clean_alias(alias)
+    if alias in GENERIC_ALIAS_VALUES:
+        return
+    aliases.setdefault(alias, genome_name)
+    unversioned = strip_version(alias)
+    if unversioned != alias:
+        aliases.setdefault(unversioned, genome_name)
+
+
+def genome_lookup(genome_names):
+    lookup = {}
+    for name in genome_names:
+        add_alias(lookup, name, name)
+    return lookup
+
+
+def fasta_header_aliases(path, genome_names):
+    aliases = {}
+    with open(path) as handle:
+        for line in handle:
+            if not line.startswith(">"):
+                continue
+            header = line[1:].strip()
+            primary = header.split()[0]
+            if primary not in genome_names:
+                continue
+            add_alias(aliases, primary, primary)
+            primary_base = strip_version(primary)
+
+            for pattern in (
+                r"\bscaffold_\d+\b",
+                r"\bdd_Smes_g4_\d+\b",
+                r"\bspur5_(?:contig|scaffold)_\d+\b",
+                r"\bscf\d+\b",
+                r"\bscaffold\d+\b",
+            ):
+                for match in re.finditer(pattern, header):
+                    alias = match.group(0)
+                    add_alias(aliases, alias, primary)
+                    if alias.startswith("dd_Smes_g4_"):
+                        add_alias(aliases, f"{primary_base}_{alias}", primary)
+
+            for match in re.finditer(r"\bchromosome\s+([A-Za-z0-9_.-]+)", header):
+                alias = clean_alias(match.group(1))
+                add_alias(aliases, alias, primary)
+                add_alias(aliases, f"chr{alias}", primary)
+                add_alias(aliases, f"Chr{alias}", primary)
+    return aliases
+
+
 def load_aliases(path, genome_names):
     aliases = {}
     if not path:
         return aliases
+    lookup = genome_lookup(genome_names)
     with open(path) as handle:
         for raw_line in handle:
             if not raw_line.strip() or raw_line.startswith("#"):
                 continue
-            parts = raw_line.rstrip("\n").split("\t")
+            parts = [clean_alias(part) for part in raw_line.rstrip("\n").split("\t")]
+            parts = [part for part in parts if part not in GENERIC_ALIAS_VALUES]
             if len(parts) < 2:
                 continue
-            alias, chrom = parts[0], parts[1]
-            if chrom in genome_names:
-                aliases[alias] = chrom
+            genome_name = None
+            for part in parts:
+                if part in lookup:
+                    genome_name = lookup[part]
+                    break
+            if genome_name is None:
+                continue
+            for part in parts:
+                add_alias(aliases, part, genome_name)
     return aliases
 
 
 def candidate_names(chrom):
     names = [chrom]
+    unversioned = strip_version(chrom)
+    if unversioned != chrom:
+        names.append(unversioned)
     if chrom.startswith("chr"):
         names.append(chrom[3:])
     else:
         names.append(f"chr{chrom}")
+        names.append(f"Chr{chrom}")
+    chr_match = re.match(r"^.+_Chr(.+)$", chrom)
+    if chr_match:
+        suffix = chr_match.group(1)
+        names.extend([suffix, f"chr{suffix}", f"Chr{suffix}"])
     return names
 
 
@@ -65,7 +156,8 @@ def parse_args():
 def main():
     args = parse_args()
     genome_names = fasta_headers(args.genome)
-    aliases = load_aliases(args.alias, genome_names)
+    aliases = fasta_header_aliases(args.genome, genome_names)
+    aliases.update(load_aliases(args.alias, genome_names))
     total_rows = 0
     matched_rows = 0
     mappings = Counter()

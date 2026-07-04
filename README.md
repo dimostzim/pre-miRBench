@@ -64,18 +64,24 @@ python pipeline/build_dataset.py \
 
 The dataset builder creates one validation split and four test splits:
 
+![Dataset split schematic](figures/dataset_split_clouds.png)
+
 | Split | Meaning |
 | --- | --- |
-| `valid` | Model-selection split from known species and known families. Exact pre-miRNA sequence is still held out. |
-| `test_known_species_known_family` | Species appears in train, and miRNA family appears in train. Exact pre-miRNA sequence is still held out. |
+| `valid` | Model-selection split from known species and known families. Exact 100 nt input sequence is still held out. |
+| `test_known_species_known_family` | Species appears in train, and miRNA family appears in train. Exact 100 nt input sequence is still held out. |
 | `test_known_species_heldout_family` | Species appears in train, but miRNA family is absent from train. |
 | `test_heldout_species_known_family` | Species is absent from train, but miRNA family appears in train. |
 | `test_heldout_species_heldout_family` | Species is absent from train, and miRNA family is absent from train. |
 
-No non-train positive row is allowed to share the exact annotated pre-miRNA
-sequence with train. Known-species duplicates are moved back to train when that
-does not break the split definition; held-out-species duplicates are excluded
-from evaluation.
+The canonical leakage key is the exact prepared 100 nt sequence. No final row is
+allowed to share this key with any other final row, including train/validation,
+train/test, test/test, within-split duplicates, and positive/negative conflicts.
+Duplicate positives are collapsed before negative selection. Negatives are
+selected after the positive splits are fixed, using train positives for
+hard-negative mining, and each split is validated against the requested
+negative:positive ratio. The builder writes `leakage_report.csv` next to
+`dataset.csv`.
 
 Build Docker images:
 
