@@ -64,7 +64,7 @@ python pipeline/build_dataset.py \
 
 The dataset builder creates one validation split and four test splits:
 
-![Dataset split schematic](figures/dataset_split_clouds.png)
+![Dataset split matrix](figures/dataset_split_matrix.png)
 
 | Split | Meaning |
 | --- | --- |
