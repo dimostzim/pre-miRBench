@@ -1,181 +1,159 @@
 # pre-miRBench
 
-Pipeline for retraining and evaluating pre-miRNA prediction tools.
+Pipeline for building a multispecies pre-miRNA benchmark, retraining supported
+tools, and evaluating them on controlled held-out splits.
 
-## Environment
+The current benchmark is based on the `mirgenedb_71` panel: 71 MirGeneDB
+species with matched genome FASTA files and verified precursor coordinates.
 
-The dataset builder needs `RNAfold`, which is provided by ViennaRNA in the
-conda environment:
+## Repository Contents
+
+- `panels/mirgenedb_71/` - final species panel and small supplement addenda
+- `pipeline/download_data.sh` - download BED/FASTA data for the panel
+- `pipeline/build_dataset.py` - build the canonical dataset and tool inputs
+- `pipeline/train.py` - train one Dockerized tool
+- `pipeline/evaluate.py` - evaluate trained tools on the test splits
+- `tools/<tool>/` - Dockerfiles plus training/inference adapters
+- `tests/fixtures/` - small smoke-test fixtures
+
+## Setup
+
+Create the pipeline environment:
 
 ```bash
 conda env create -f pipeline/environment.yml
 conda activate premirbench
 ```
 
-## Structure
-
-- `pipeline/download_data.sh` - download the final species panel and write `panel.tsv`
-- `pipeline/build_dataset.py` - build canonical train/validation/test splits and per-tool inputs
-- `pipeline/train.py` - train one tool image on the prepared dataset
-- `pipeline/evaluate.py` - evaluate trained tools on held-out splits
-- `panels/mirgenedb_71/` - final 71-species MirGeneDB panel manifest and supplement addenda
-- `tools/<tool>/` - Dockerfile plus tool-specific `train.py` and `inference.py` adapters
-- `tests/fixtures/` - small committed fixtures used by tests
-
-Generated data and outputs are ignored:
-
-- `data/raw/`
-- `data/datasets/`
-- `data/work/`
-- `results/training/`
-- `results/evaluation/`
-- `tools/*/*_src/`
-
-## Workflow
-
-Download the species panel:
-
-```bash
-bash pipeline/download_data.sh
-```
-
-The default panel source is `panels/mirgenedb_71/species_panel.tsv`, and the
-default raw output is `data/raw/mirgenedb_71`. To smoke-test one or a few
-species before downloading everything:
-
-```bash
-SPECIES=hsa,mmu bash pipeline/download_data.sh
-```
-
-Build the retraining dataset:
-
-```bash
-python pipeline/build_dataset.py
-```
-
-Example for a 1:10 positive:negative ratio on a 96-CPU machine:
-
-```bash
-python pipeline/build_dataset.py \
-  --ratio 10 \
-  --cpus 8 \
-  --species-jobs 12
-```
-
-The dataset builder creates one validation split and four test splits:
-
-![Dataset split schematic](figures/dataset_split_clouds.png)
-
-| Split | Meaning |
-| --- | --- |
-| `valid` | Model-selection split from known species and known families. Exact 100 nt input sequence is still held out. |
-| `test_known_species_known_family` | Species appears in train, and miRNA family appears in train. Exact 100 nt input sequence is still held out. |
-| `test_known_species_heldout_family` | Species appears in train, but miRNA family is absent from train. |
-| `test_heldout_species_known_family` | Species is absent from train, but miRNA family appears in train. |
-| `test_heldout_species_heldout_family` | Species is absent from train, and miRNA family is absent from train. |
-
-The canonical leakage key is the exact prepared 100 nt sequence. No final row is
-allowed to share this key with any other final row, including train/validation,
-train/test, test/test, within-split duplicates, and positive/negative conflicts.
-Positive rows are assigned to splits before de-duplication, then exact 100 nt
-duplicate positives are collapsed by keeping the row in the strictest split:
-`test_heldout_species_heldout_family`, `test_heldout_species_known_family`,
-`test_known_species_heldout_family`, `test_known_species_known_family`, `valid`,
-then `train`. Ties inside the same priority class are resolved deterministically
-by species, family, miRNA id, chromosome, start, and window id. Negatives are
-selected after the positive splits are fixed, using train positives for
-hard-negative mining, and each split is validated against the requested
-negative:positive ratio. The builder writes `leakage_report.csv` next to
-`dataset.csv`.
-
-Build Docker images:
+Build the tool Docker images:
 
 ```bash
 bash tools/setup_images.sh
 ```
 
-Train each tool:
+## Provided Dataset
+
+The prepared dataset can be provided separately from git because it is large.
+If you already have it, place it anywhere convenient and point commands to it
+with `--dataset-dir`.
+
+Expected layout:
+
+```text
+mirgenedb_71/
+  dataset.csv
+  genome.fa
+  split_summary.csv
+  family_split_summary.csv
+  leakage_report.csv
+  tool_inputs/
+```
+
+Example:
+
+```bash
+export SCR=/SCRATCH/$USER/pre-miRBench
+export DATASET=$SCR/datasets/mirgenedb_71
+export TRAIN_OUT=$SCR/results/training
+```
+
+## Rebuild Dataset
+
+Download the panel:
+
+```bash
+bash pipeline/download_data.sh data/raw/mirgenedb_71
+```
+
+Build the 1:10 dataset:
+
+```bash
+python pipeline/build_dataset.py \
+  --panel data/raw/mirgenedb_71/panel.tsv \
+  --output-dir data/datasets/mirgenedb_71 \
+  --work-dir data/work/build_mirgenedb_71 \
+  --ratio 10 \
+  --cpus 8 \
+  --species-jobs 12
+```
+
+For scratch storage:
+
+```bash
+export SCR=/SCRATCH/$USER/pre-miRBench
+
+bash pipeline/download_data.sh "$SCR/raw/mirgenedb_71"
+
+python pipeline/build_dataset.py \
+  --panel "$SCR/raw/mirgenedb_71/panel.tsv" \
+  --output-dir "$SCR/datasets/mirgenedb_71" \
+  --work-dir "$SCR/work/build_mirgenedb_71" \
+  --ratio 10 \
+  --cpus 8 \
+  --species-jobs 12
+```
+
+Useful build flags:
+
+- `--ratio 10` means 10 negatives per positive.
+- `--cpus` controls RNAfold workers per species.
+- `--species-jobs` controls how many species run in parallel.
+- `--reuse-existing` reuses completed intermediate files.
+- `--heldout-species` controls which species are absent from train.
+
+## Splits
+
+The builder creates one validation split and four test splits:
+
+| Split | Meaning |
+| --- | --- |
+| `valid` | Same species and same miRNA families as train. Used only for model selection. |
+| `test_known_species_known_family` | Same species and same miRNA families as train. |
+| `test_known_species_heldout_family` | Same species as train, held-out miRNA families. |
+| `test_heldout_species_known_family` | Held-out species, same miRNA families as train. |
+| `test_heldout_species_heldout_family` | Held-out species and held-out miRNA families. |
+
+Final rows are globally de-duplicated by exact prepared 100 nt sequence, so the
+same prepared input sequence cannot appear in multiple splits or labels.
+`leakage_report.csv` records the final checks.
+
+## Train
+
+Train one tool:
+
+```bash
+python pipeline/train.py \
+  --tool mirdnn \
+  --run-name mirgenedb71_1to10 \
+  --dataset-dir "$DATASET" \
+  --output-root "$TRAIN_OUT"
+```
+
+Train all tools:
 
 ```bash
 for tool in deepmir deepmirgene dnnpremir mirdnn mire2e mustard; do
-  python pipeline/train.py --tool "$tool" --run-name mirgenedb71_gpu_1to10
+  PYTHONUNBUFFERED=1 python -u pipeline/train.py \
+    --tool "$tool" \
+    --run-name mirgenedb71_1to10 \
+    --dataset-dir "$DATASET" \
+    --output-root "$TRAIN_OUT"
 done
 ```
 
-Evaluate trained tools:
+Each trained tool writes an `inference_config.yaml` next to its model artifact.
+
+## Evaluate
+
+Evaluate all trained tools:
 
 ```bash
-python pipeline/evaluate.py --run-name mirgenedb71_gpu_1to10
+python pipeline/evaluate.py \
+  --dataset-dir "$DATASET" \
+  --training-root "$TRAIN_OUT" \
+  --run-name mirgenedb71_1to10 \
+  --output-dir "$SCR/results/evaluation/mirgenedb71_1to10"
 ```
 
-## Dataset Options
-
-`pipeline/build_dataset.py` builds `data/datasets/mirgenedb_71` from the downloaded
-species panel. `--ratio` is the negative:positive ratio, so `--ratio 10` means
-ten negative windows for each positive precursor.
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `--panel` | `data/raw/mirgenedb_71/panel.tsv` | Species manifest from `pipeline/download_data.sh`. |
-| `--output-dir` | `data/datasets/mirgenedb_71` | Final dataset, combined genome, split summary, and per-tool inputs. |
-| `--work-dir` | `data/work/build_mirgenedb_71` | Intermediate per-species files. |
-| `--species` | all auto species | Comma-separated species codes to include, for example `hsa,mmu,gga`. |
-| `--heldout-species` | `gga,dme` | Comma-separated species absent from train. |
-| `--valid-frac` | `0.10` | Fraction of known-species positives targeted for validation. |
-| `--valid-heldout-family-frac` | `0.0` | Fraction of validation positives targeted from validation-only held-out families. Default keeps validation train-like. |
-| `--test-known-species-known-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/known-family test. |
-| `--test-known-species-heldout-family-frac` | `0.10` | Fraction of known-species positives targeted for known-species/held-out-family test. |
-| `--ratio` | `5` | Negative:positive ratio. Use `10` for 1:10. |
-| `--window` | `200` | Sequence window length around each precursor. |
-| `--step` | `50` | Sliding-window step used when scanning candidate negatives. |
-| `--max-negative-windows-per-species` | `50000` | Cap on candidate negative windows per species before mining. |
-| `--sequential-negative-scan` | off | Scan negative windows in FASTA order instead of balanced chromosome sampling. |
-| `--max-repeat-frac` | `0.1` | Drop windows with more than this fraction of repeat-masked bases. |
-| `--min-mfe` | `-10.0` | Minimum RNAfold MFE threshold for candidate hairpins. |
-| `--min-paired-frac` | `0.40` | Minimum paired-base fraction for candidate hairpins. |
-| `--min-stem` | `8` | Minimum stem length for candidate hairpins. |
-| `--max-loop` | `25` | Maximum loop length for candidate hairpins. |
-| `--cpus` | `8` | RNAfold jobs per species. |
-| `--species-jobs` | `1` | Number of species processed in parallel. |
-| `--mining-rounds` | `4` | Hard-negative mining rounds. |
-| `--ensemble-size` | `10` | RandomForest ensemble size used during hard-negative mining. |
-| `--trees` | `200` | Trees per RandomForest model during mining. |
-| `--consensus` | `0.5` | Consensus threshold for selecting hard negatives. |
-| `--mining-jobs` | auto | RandomForest jobs per species. Default is `-1` when sequential, `1` when `--species-jobs > 1`. |
-| `--seed` | `42` | Random seed for sampling and splits. |
-| `--reuse-existing` | off | Reuse existing intermediate files where supported. |
-
-## Training Options
-
-`pipeline/train.py` trains one Dockerized tool at a time.
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `--tool` | required | Tool to train: `mustard`, `mire2e`, `mirdnn`, `dnnpremir`, `deepmir`, or `deepmirgene`. |
-| `--run-name` | required | Output subdirectory under `results/training/<tool>/`. |
-| `--dataset-dir` | `data/datasets/mirgenedb_71` | Dataset created by `pipeline/build_dataset.py`. |
-| `--config` | none | Optional YAML file overriding the derived tool training defaults. |
-| `--output-root` | `results/training` | Root directory for training outputs. Supports env vars such as `$SCRATCH`. |
-
-Common `--config` overrides are `device`, `batch_size`, `epochs`, early-stopping
-settings, and tool-specific paths or model parameters. The generated
-`inference_config.yaml` is written into each training output directory and is
-used later by evaluation.
-
-## Evaluation Options
-
-`pipeline/evaluate.py` evaluates trained tools on held-out splits.
-
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `--dataset-dir` | `data/datasets/mirgenedb_71` | Dataset created by `pipeline/build_dataset.py`. |
-| `--training-root` | `results/training` | Root directory containing trained tool outputs. |
-| `--run-name` | latest/required by outputs | Training run name to evaluate. |
-| `--output-dir` | `results/evaluation/<run-name>` | Evaluation output directory. |
-| `--tools` | all tools | Comma-separated tools to evaluate. |
-| `--splits` | all four test splits | Comma-separated splits to evaluate. |
-| `--skip-inference` | off | Parse existing raw outputs without rerunning Docker. |
-| `--resume` | off | Reuse non-empty raw output directories instead of rerunning inference. |
-| `--allow-missing` | off | Skip tools whose trained `inference_config.yaml` is missing. |
-| `--dry-run` | off | Print Docker commands without running them. |
-| `--log-file` | `<output-dir>/run.log.txt` | Optional evaluation log path. |
+Evaluation writes predictions, metrics, per-species metrics, logs, and AUPRC
+bar plots for the four test splits.
