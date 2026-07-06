@@ -19,6 +19,11 @@ TEST_SPLITS = {
     "test_heldout_species_heldout_family": "test_heldout_species_heldout_family",
 }
 
+DEFAULT_PHACT_PREMIRNA_POSITIONS = (
+    "/home/dtzim01/drive-download-19Ntprvu-qbI1k4ZQphZ4QnuFoXNIgK2E/"
+    "extracted/results_0226/orthologs_qntnorm_transformed.tsv"
+)
+
 SAMPLE_FIELDS = [
     "id",
     "species",
@@ -49,108 +54,68 @@ def gc_fraction(sequence):
     return f"{gc / len(seq):.6f}"
 
 
-def phact_family_from_mature_id(mature_id):
-    core = mature_id
+def phact_family_from_premirna_id(premirna_id):
+    core = premirna_id
     if core.startswith("Hsa-"):
         core = core[4:]
-    core = core.rsplit("_", 1)[0]
     for marker in ("-P", "-v"):
         if marker in core:
             core = core.split(marker, 1)[0]
     return core.upper()
 
 
-def premirna_id_from_mature_id(mature_id):
-    return mature_id.rsplit("_", 1)[0]
-
-
-def arm_from_mature_id(mature_id):
-    return mature_id.rsplit("_", 1)[1] if "_" in mature_id else "NA"
-
-
-def load_phact_profiles(phact_path):
-    phact_rows = []
-    profiles = defaultdict(dict)
-    profile_counts = defaultdict(int)
-    family_stats = defaultdict(lambda: {"sum": 0.0, "count": 0, "min": None, "max": None})
+def load_premirna_phact_index(phact_path):
+    position_nucleotides = defaultdict(lambda: defaultdict(set))
+    row_count = 0
 
     with open(phact_path, newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
-        fieldnames = reader.fieldnames or []
-        phact_columns = [
-            field
-            for field in fieldnames
-            if field.startswith("phact_") and field.rsplit("_", 1)[-1] in {"A", "C", "G", "T"}
-        ]
+        required_fields = {"ID", "Position", "Nucleotide"}
+        missing_fields = required_fields - set(reader.fieldnames or [])
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            raise ValueError(f"PHACT precursor table missing required columns: {missing}")
+
         for row in reader:
-            phact_rows.append(row)
-            mature_id = row["mirgenedb_mature_id"]
-            position = int(row["mirna_position_1based"])
-            profiles[mature_id][position] = row["actual_nt"]
-            profile_counts[mature_id] += 1
-            family = phact_family_from_mature_id(mature_id)
-            for column in phact_columns:
-                raw_value = row[column]
-                if raw_value in {"", "NA"}:
-                    continue
-                value = float(raw_value)
-                model, nucleotide = column[len("phact_") :].rsplit("_", 1)
-                stat = family_stats[(family, model, nucleotide)]
-                stat["sum"] += value
-                stat["count"] += 1
-                stat["min"] = value if stat["min"] is None else min(stat["min"], value)
-                stat["max"] = value if stat["max"] is None else max(stat["max"], value)
+            row_count += 1
+            premirna_id = row["ID"]
+            position = int(row["Position"])
+            nucleotide = row["Nucleotide"].upper()
+            position_nucleotides[premirna_id][position].add(nucleotide)
 
-    return phact_rows, profiles, profile_counts, family_stats
+    index_rows = []
+    for premirna_id in sorted(position_nucleotides):
+        positions = sorted(position_nucleotides[premirna_id])
+        all_four_states = all(
+            position_nucleotides[premirna_id][position] == {"A", "C", "G", "T"} for position in positions
+        )
+        index_rows.append(
+            {
+                "mirgenedb_premirna_id": premirna_id,
+                "family": phact_family_from_premirna_id(premirna_id),
+                "position_count": len(positions),
+                "min_position": min(positions),
+                "max_position": max(positions),
+                "has_all_four_nt_states": "true" if all_four_states else "false",
+            }
+        )
+
+    return index_rows, row_count
 
 
-def write_phact_profiles(path, profiles, profile_counts):
+def write_premirna_phact_index(path, index_rows):
     fields = [
-        "mirgenedb_mature_id",
         "mirgenedb_premirna_id",
         "family",
-        "arm",
-        "mature_sequence_dna",
-        "mature_length",
-        "phact_position_count",
+        "position_count",
+        "min_position",
+        "max_position",
+        "has_all_four_nt_states",
     ]
     with open(path, "w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
         writer.writeheader()
-        for mature_id in sorted(profiles):
-            positions = profiles[mature_id]
-            sequence = "".join(positions[index] for index in sorted(positions))
-            writer.writerow(
-                {
-                    "mirgenedb_mature_id": mature_id,
-                    "mirgenedb_premirna_id": premirna_id_from_mature_id(mature_id),
-                    "family": phact_family_from_mature_id(mature_id),
-                    "arm": arm_from_mature_id(mature_id),
-                    "mature_sequence_dna": dna_sequence(sequence),
-                    "mature_length": len(sequence),
-                    "phact_position_count": profile_counts[mature_id],
-                }
-            )
-
-
-def write_phact_family_summary(path, family_stats):
-    fields = ["family", "phact_model", "nucleotide", "mean_score", "min_score", "max_score", "value_count"]
-    with open(path, "w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
-        writer.writeheader()
-        for (family, model, nucleotide), stat in sorted(family_stats.items()):
-            count = stat["count"]
-            writer.writerow(
-                {
-                    "family": family,
-                    "phact_model": model,
-                    "nucleotide": nucleotide,
-                    "mean_score": f"{stat['sum'] / count:.8f}" if count else "NA",
-                    "min_score": f"{stat['min']:.8f}" if stat["min"] is not None else "NA",
-                    "max_score": f"{stat['max']:.8f}" if stat["max"] is not None else "NA",
-                    "value_count": count,
-                }
-            )
+        writer.writerows(index_rows)
 
 
 def write_metadata(dataset_dir, dataset_name):
@@ -160,7 +125,10 @@ def write_metadata(dataset_dir, dataset_name):
         "positive_class": "1",
         "negative_class": "0",
         "label_to_scalar": {"0": 0, "1": 1},
-        "source": "pre-miRBench MirGeneDB 71-species precursor benchmark with global PHACT miRNA reference tables",
+        "source": (
+            "pre-miRBench MirGeneDB 71-species precursor benchmark with "
+            "global precursor-level PHACT reference table"
+        ),
     }
     (dataset_dir / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
 
@@ -202,10 +170,10 @@ These hidden splits are stored under `test_datasets/{dataset_name}/`.
 Every split has the same top-level input files:
 
 - `samples.tsv`: one row per sample ID.
-- `phact_mirna_positions.tsv`: global human mature-miRNA PHACT reference table.
-- `phact_mirna_profiles.tsv`: mature-miRNA profile summary reconstructed from
-  the PHACT position table.
-- `phact_family_summary.tsv`: family-level summary of the PHACT score table.
+- `phact_premirna_positions.tsv`: global human precursor-miRNA PHACT reference
+  table.
+- `phact_premirna_index.tsv`: small index of precursor IDs, families, and
+  precursor-position counts from the PHACT table.
 
 ## `samples.tsv`
 
@@ -231,19 +199,18 @@ because those fields encode label provenance and would leak the answer.
 ## PHACT Reference Tables
 
 PHACT stands for PHylogeny-Aware Computation of Tolerance for nucleotide
-substitutions. The included PHACT table is the same human mature-miRNA reference
-used by `manakov_phact/train/input/phact_mirna_positions.tsv`.
+substitutions. The included table is the human precursor-miRNA PHACT reference
+from `orthologs_qntnorm_transformed.tsv`.
 
-`phact_mirna_positions.tsv` is keyed by `mirgenedb_mature_id` and
-`mirna_position_1based`; it is not keyed by sample ID. It should be treated as a
-global sequence/evolutionary reference. Each position contains the observed
-nucleotide plus nucleotide-state scores for multiple PHACT models.
+`phact_premirna_positions.tsv` is keyed by MirGeneDB precursor ID (`ID`),
+precursor position (`Position`), and nucleotide state (`Nucleotide`); it is not
+keyed by sample ID. It should be treated as a global sequence/evolutionary
+reference. Each precursor position has A/C/G/T score rows for multiple PHACT
+models.
 
-`phact_mirna_profiles.tsv` provides one row per mature miRNA with the mature
-sequence reconstructed from the PHACT position rows.
-
-`phact_family_summary.tsv` aggregates PHACT scores by mature-miRNA family,
-PHACT model, and nucleotide.
+`phact_premirna_index.tsv` provides one row per precursor ID so agents can see
+which precursor families and lengths are represented without scanning the full
+PHACT score table.
 """
     (dataset_dir / "dataset_description.md").write_text(description)
 
@@ -256,12 +223,11 @@ def reset_dir(path, overwrite):
     path.mkdir(parents=True)
 
 
-def make_split(split_dir, rows, phact_path, phact_profiles_path, phact_family_summary_path):
+def make_split(split_dir, rows, phact_path, phact_index_path):
     input_dir = split_dir / "input"
     input_dir.mkdir(parents=True)
-    shutil.copy2(phact_path, input_dir / "phact_mirna_positions.tsv")
-    shutil.copy2(phact_profiles_path, input_dir / "phact_mirna_profiles.tsv")
-    shutil.copy2(phact_family_summary_path, input_dir / "phact_family_summary.tsv")
+    shutil.copy2(phact_path, input_dir / "phact_premirna_positions.tsv")
+    shutil.copy2(phact_index_path, input_dir / "phact_premirna_index.tsv")
 
     labels_path = split_dir / "labels.csv"
     samples_path = input_dir / "samples.tsv"
@@ -325,7 +291,7 @@ contain per-sample source IDs because the original benchmark IDs encode
 positive/negative provenance.
 
 - pre-miRBench dataset CSV: `{source_dataset_csv}`
-- PHACT miRNA positions source: `{source_phact_path}`
+- PHACT precursor positions source: `{source_phact_path}`
 """
     (supp_dir / "README.md").write_text(readme)
 
@@ -334,8 +300,8 @@ def main():
     parser = argparse.ArgumentParser(description="Export pre-miRBench as an Agentomics dataset.")
     parser.add_argument("--dataset-csv", default="/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71/dataset.csv")
     parser.add_argument(
-        "--phact-mirna-positions",
-        default="/home/dtzim01/agentomics-ml/datasets/manakov_phact/train/input/phact_mirna_positions.tsv",
+        "--phact-premirna-positions",
+        default=DEFAULT_PHACT_PREMIRNA_POSITIONS,
     )
     parser.add_argument("--agentomics-root", default="/home/dtzim01/agentomics-ml")
     parser.add_argument("--dataset-name", default="premirbench_mirgenedb71")
@@ -343,7 +309,7 @@ def main():
     args = parser.parse_args()
 
     dataset_csv = Path(args.dataset_csv)
-    phact_path = Path(args.phact_mirna_positions)
+    phact_path = Path(args.phact_premirna_positions)
     agentomics_root = Path(args.agentomics_root)
     public_dir = agentomics_root / "datasets" / args.dataset_name
     hidden_dir = agentomics_root / "test_datasets" / args.dataset_name
@@ -356,19 +322,17 @@ def main():
     reset_dir(public_dir, args.overwrite)
     reset_dir(hidden_dir, args.overwrite)
 
-    _, profiles, profile_counts, family_stats = load_phact_profiles(phact_path)
+    phact_index_rows, phact_row_count = load_premirna_phact_index(phact_path)
     phact_work_dir = public_dir / "supplementary" / "_phact_export"
     phact_work_dir.mkdir(parents=True)
-    phact_profiles_path = phact_work_dir / "phact_mirna_profiles.tsv"
-    phact_family_summary_path = phact_work_dir / "phact_family_summary.tsv"
-    write_phact_profiles(phact_profiles_path, profiles, profile_counts)
-    write_phact_family_summary(phact_family_summary_path, family_stats)
+    phact_index_path = phact_work_dir / "phact_premirna_index.tsv"
+    write_premirna_phact_index(phact_index_path, phact_index_rows)
 
     grouped = grouped_rows(dataset_csv)
     for split_name in ("train", "validation"):
-        make_split(public_dir / split_name, grouped[split_name], phact_path, phact_profiles_path, phact_family_summary_path)
+        make_split(public_dir / split_name, grouped[split_name], phact_path, phact_index_path)
     for split_name in sorted(TEST_SPLITS.values()):
-        make_split(hidden_dir / split_name, grouped[split_name], phact_path, phact_profiles_path, phact_family_summary_path)
+        make_split(hidden_dir / split_name, grouped[split_name], phact_path, phact_index_path)
 
     shutil.rmtree(phact_work_dir)
     write_metadata(public_dir, args.dataset_name)
@@ -383,7 +347,17 @@ def main():
         }
         for split, rows in sorted(grouped.items())
     }
-    print(json.dumps({"dataset": args.dataset_name, "splits": summary, "phact_mature_profiles": len(profiles)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "dataset": args.dataset_name,
+                "splits": summary,
+                "phact_premirnas": len(phact_index_rows),
+                "phact_rows": phact_row_count,
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
