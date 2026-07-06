@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import argparse
 import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -77,6 +79,14 @@ def patch_safe_chromosome_filenames(base_dir):
         dnn_path.write_text(dnn_text)
 
 
+def copy_patched_mustard_source(base_dir):
+    runtime_dir = tempfile.TemporaryDirectory(prefix="mustard_runtime_")
+    patched_base = Path(runtime_dir.name)
+    shutil.copytree(Path(base_dir) / "mustard_src", patched_base / "mustard_src")
+    patch_safe_chromosome_filenames(patched_base)
+    return runtime_dir, patched_base
+
+
 def main():
     p = argparse.ArgumentParser()
 
@@ -100,9 +110,7 @@ def main():
     p.add_argument("--step", type=int, default=5)
     args = p.parse_args()
 
-    perl_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mustard_src", "MuStARD.pl")
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    patch_safe_chromosome_filenames(base_dir)
 
     # Resolve bundled model names and explicit trained model paths.
     if os.path.isfile(args.model):
@@ -116,9 +124,12 @@ def main():
     if not os.path.isdir(args.dir):
         os.makedirs(args.dir)
 
+    runtime_source, patched_base_dir = copy_patched_mustard_source(base_dir)
+    perl_script = patched_base_dir / "mustard_src" / "MuStARD.pl"
+
     cmd = [
         "perl",
-        perl_script,
+        str(perl_script),
         "predict",
         "--chromList", args.chromList,
         "--targetIntervals", os.path.abspath(args.targetIntervals),
@@ -139,7 +150,10 @@ def main():
     if args.intermDir != "same":
         cmd.extend(["--intermDir", os.path.abspath(args.intermDir)])
 
-    subprocess.check_call(cmd)
+    try:
+        subprocess.check_call(cmd)
+    finally:
+        runtime_source.cleanup()
 
 
 if __name__ == "__main__":
