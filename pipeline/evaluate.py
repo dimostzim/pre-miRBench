@@ -412,6 +412,7 @@ def build_inference_args(tool, root, train_helpers, config, input_path, output_d
         cons_dir = require_config_path(root, config, "consDir", expect_dir=True)
         model = optional_path_or_literal(root, train_helpers, config, "model", mounts)
         interm_dir = output_dir / "intermediate"
+        interm_dir.mkdir(parents=True, exist_ok=True)
         interm_arg = train_helpers.container_path(str(root), interm_dir, mounts, read_only=False)
         args.extend(["--targetIntervals", input_arg])
         args.extend(["--genome", train_helpers.container_path(str(root), genome, mounts, read_only=False)])
