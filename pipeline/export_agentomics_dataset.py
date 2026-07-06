@@ -149,6 +149,10 @@ Predict whether each RNA window is a precursor-miRNA candidate.
 The prediction unit is `id`. Labels are stored in each split's `labels.csv`.
 Inputs are stored under each split's `input/` directory.
 
+This is a sequence classification task. A model should use the provided RNA
+window sequence and optional derived features/reference tables to predict the
+binary label for each sample ID.
+
 ## Splits
 
 Public Agentomics splits:
@@ -174,6 +178,16 @@ Every split has the same top-level input files:
   table.
 - `phact_premirna_index.tsv`: small index of precursor IDs, families, and
   precursor-position counts from the PHACT table.
+
+Each split also has `labels.csv` outside `input/`.
+
+## `labels.csv`
+
+Columns:
+
+- `id`: sample ID.
+- `label`: binary class label. `1` means precursor-miRNA, `0` means negative
+  hairpin-like genomic window.
 
 ## `samples.tsv`
 
@@ -208,9 +222,32 @@ keyed by sample ID. It should be treated as a global sequence/evolutionary
 reference. Each precursor position has A/C/G/T score rows for multiple PHACT
 models.
 
+Columns:
+
+- `ID`: human MirGeneDB precursor-miRNA ID, for example `Hsa-Let-7-P1b`.
+- `Position`: 1-based position within the precursor-miRNA sequence.
+- `Nucleotide`: candidate nucleotide state at that precursor position.
+- `PHACTn_*`: PHACT tolerance scores from different normalization/model
+  variants. Higher or lower score interpretation should follow the PHACT
+  method documentation for the specific model variant.
+
 `phact_premirna_index.tsv` provides one row per precursor ID so agents can see
 which precursor families and lengths are represented without scanning the full
 PHACT score table.
+
+Columns:
+
+- `mirgenedb_premirna_id`: human MirGeneDB precursor-miRNA ID.
+- `family`: precursor family parsed from the MirGeneDB precursor ID.
+- `position_count`: number of precursor positions in the PHACT table.
+- `min_position`, `max_position`: observed 1-based position range.
+- `has_all_four_nt_states`: whether every precursor position has A/C/G/T rows.
+
+The PHACT files are optional global reference data. They are not a lookup table
+for every benchmark sample: the benchmark contains 71 species, while this PHACT
+reference is human precursor-level data. The sample table deliberately does not
+include MirGeneDB precursor IDs or family IDs, because those fields identify
+positive examples and would leak the label.
 """
     (dataset_dir / "dataset_description.md").write_text(description)
 
