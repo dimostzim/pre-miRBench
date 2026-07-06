@@ -245,7 +245,7 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
     if not tools:
         return False
 
-    width = max(760, 130 * len(tools) + 180)
+    width = max(900, 170 * len(tools) + 180)
     height = 540
     margin_left = 70
     margin_right = 35
@@ -255,11 +255,12 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
     plot_height = height - margin_top - margin_bottom
     baseline = margin_top + plot_height
     group_width = plot_width / len(tools)
-    bar_width = min(34, group_width / 4.2)
+    split_count = max(1, len(splits))
+    bar_width = min(26, group_width * 0.72 / split_count)
     if len(splits) == 1:
         split_offsets = {splits[0]: 0}
     else:
-        offset_step = bar_width * 1.24
+        offset_step = bar_width * 1.16
         midpoint = (len(splits) - 1) / 2.0
         split_offsets = {split: (index - midpoint) * offset_step for index, split in enumerate(splits)}
 
@@ -322,7 +323,6 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
             bar_height = baseline - y
             color = SPLIT_COLORS.get(split, "#6b7280")
             lines.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" fill="{color}"/>')
-            lines.append(f'<text class="value" x="{x + bar_width / 2:.1f}" y="{y - 5:.1f}" text-anchor="middle">{value:.3f}</text>')
 
     lines.append("</svg>")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -337,6 +337,7 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
+        print("warning: skipped PNG AUPRC plot because matplotlib is not installed")
         return False
 
     values = {}
@@ -350,10 +351,11 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
     if not tools:
         return False
 
-    fig_width = max(7.6, 1.25 * len(tools) + 1.8)
+    fig_width = max(10.0, 1.8 * len(tools) + 2.5)
     fig, ax = plt.subplots(figsize=(fig_width, 5.0), dpi=160)
     x_positions = list(range(len(tools)))
-    bar_width = 0.34 if len(splits) > 1 else 0.55
+    total_group_width = 0.76
+    bar_width = total_group_width / max(1, len(splits)) if len(splits) > 1 else 0.55
     midpoint = (len(splits) - 1) / 2.0
 
     for split_index, split in enumerate(splits):
@@ -368,36 +370,27 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
             color=color,
             label=SPLIT_LABELS.get(split, split),
         )
-        for bar, height, is_present in zip(bars, heights, present):
+        for bar, is_present in zip(bars, present):
             if not is_present:
                 bar.set_alpha(0.0)
-                continue
-            ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                min(1.02, height + 0.018),
-                f"{height:.3f}",
-                ha="center",
-                va="bottom",
-                fontsize=8,
-            )
 
     ax.set_title("AUPRC by Tool", fontsize=13, fontweight="bold")
-    ax.set_xlabel("Tool")
+    ax.set_xlabel("")
     ax.set_ylabel("AUPRC")
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(tools)
+    ax.set_xticklabels(tools, rotation=28, ha="right")
     ax.set_ylim(0, 1.05)
     ax.grid(axis="y", color="#d8dee9", linewidth=0.8)
     ax.set_axisbelow(True)
     ax.legend(
         frameon=False,
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.18),
-        ncol=max(1, len(splits)),
+        bbox_to_anchor=(0.5, -0.24),
+        ncol=2 if len(splits) > 1 else 1,
     )
-    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path)
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     return True
 
