@@ -169,9 +169,19 @@ Hidden Agentomics test splits:
 
 These hidden splits are stored under `test_datasets/{dataset_name}/`.
 
-## Input Files
+## Layout
 
-Every split has the same top-level input files:
+Each split folder contains:
+
+```text
+labels.csv
+input/
+  samples.tsv
+  phact_premirna_positions.tsv
+  phact_premirna_index.tsv
+```
+
+Every split has the same top-level input files under `input/`:
 
 - `samples.tsv`: one row per sample ID.
 - `phact_premirna_positions.tsv`: global human precursor-miRNA PHACT reference
@@ -183,28 +193,31 @@ Each split also has `labels.csv` outside `input/`.
 
 ## `labels.csv`
 
-Columns:
-
-- `id`: sample ID.
-- `label`: binary class label. `1` means precursor-miRNA, `0` means negative
-  hairpin-like genomic window.
+| column | meaning |
+|---|---|
+| `id` | Sample ID. Joins to `samples.tsv.id`. |
+| `label` | Binary class label. `1` means precursor-miRNA, `0` means negative hairpin-like genomic window. |
 
 ## `samples.tsv`
 
-Columns:
+One row per precursor-miRNA candidate window.
 
-- `id`: neutral split-local sample ID matching `labels.csv.id`.
-- `species`: MirGeneDB species code.
-- `chrom`, `start_0based`, `end_0based`, `strand`: genomic window coordinates.
-- `window_length`: sequence length.
-- `sequence_rna`: RNA window sequence.
-- `sequence_dna`: same sequence with U converted to T.
-- `canonical_100nt_sequence_rna`: centered 100-nt sequence used for leakage
-  control in pre-miRBench.
-- `canonical_100nt_sequence_dna`: DNA alphabet version of the 100-nt sequence.
-- `structure`: RNAfold dot-bracket structure for the full window.
-- `mfe`: RNAfold minimum free energy.
-- `gc_fraction`: GC fraction of the full window.
+| column | meaning |
+|---|---|
+| `id` | Neutral split-local sample ID matching `labels.csv.id`. |
+| `species` | MirGeneDB species code. |
+| `chrom` | Sequence/chromosome name in the combined benchmark genome. |
+| `start_0based` | 0-based inclusive window start coordinate. |
+| `end_0based` | 0-based exclusive window end coordinate. |
+| `strand` | Genomic strand. |
+| `window_length` | Full RNA window length. |
+| `sequence_rna` | Full RNA window sequence. |
+| `sequence_dna` | Same sequence with U converted to T. |
+| `canonical_100nt_sequence_rna` | Centered 100-nt sequence used for leakage control in pre-miRBench. |
+| `canonical_100nt_sequence_dna` | DNA alphabet version of the centered 100-nt sequence. |
+| `structure` | RNAfold dot-bracket structure for the full window. |
+| `mfe` | RNAfold minimum free energy for the full window. |
+| `gc_fraction` | GC fraction of the full window. |
 
 The exported sample table intentionally omits original pre-miRBench record IDs,
 MirGeneDB precursor IDs, family IDs, negative-mining scores, and split reasons
@@ -222,26 +235,62 @@ keyed by sample ID. It should be treated as a global sequence/evolutionary
 reference. Each precursor position has A/C/G/T score rows for multiple PHACT
 models.
 
-Columns:
-
-- `ID`: human MirGeneDB precursor-miRNA ID, for example `Hsa-Let-7-P1b`.
-- `Position`: 1-based position within the precursor-miRNA sequence.
-- `Nucleotide`: candidate nucleotide state at that precursor position.
-- `PHACTn_*`: PHACT tolerance scores from different normalization/model
-  variants. Higher or lower score interpretation should follow the PHACT
-  method documentation for the specific model variant.
+| column | meaning |
+|---|---|
+| `ID` | Human MirGeneDB precursor-miRNA ID, for example `Hsa-Let-7-P1b`. |
+| `Position` | 1-based position within the precursor-miRNA sequence. |
+| `Nucleotide` | Candidate nucleotide state at that precursor position. |
+| `PHACTn_*` | PHACT tolerance score from one normalization/model variant. |
 
 `phact_premirna_index.tsv` provides one row per precursor ID so agents can see
 which precursor families and lengths are represented without scanning the full
 PHACT score table.
 
-Columns:
+| column | meaning |
+|---|---|
+| `mirgenedb_premirna_id` | Human MirGeneDB precursor-miRNA ID. |
+| `family` | Precursor family parsed from the MirGeneDB precursor ID. |
+| `position_count` | Number of precursor positions in the PHACT table. |
+| `min_position` | Minimum observed 1-based position. |
+| `max_position` | Maximum observed 1-based position. |
+| `has_all_four_nt_states` | Whether every precursor position has A/C/G/T rows. |
 
-- `mirgenedb_premirna_id`: human MirGeneDB precursor-miRNA ID.
-- `family`: precursor family parsed from the MirGeneDB precursor ID.
-- `position_count`: number of precursor positions in the PHACT table.
-- `min_position`, `max_position`: observed 1-based position range.
-- `has_all_four_nt_states`: whether every precursor position has A/C/G/T rows.
+## Joins
+
+```text
+labels.csv.id -> samples.tsv.id
+```
+
+The PHACT reference tables do not join to `samples.tsv` by sample ID. They are
+global human precursor-miRNA reference tables.
+
+## PHACT Scores
+
+PHACTn stands for PHylogeny-Aware Computation of Tolerance for Nucleotide
+substitutions. The PHACT table provides nucleotide-specific evolutionary
+features derived from orthologous precursor-miRNA alignments and phylogenetic
+context.
+
+Conceptually, PHACT asks how tolerant an aligned precursor position appears to
+be to different nucleotide states, given the pattern seen across orthologues
+and the phylogenetic relationships among species. Positions that are strongly
+preserved across evolution, or where alternative nucleotide states are less
+compatible with the phylogenetic pattern, can be interpreted as more
+evolutionarily constrained.
+
+Each precursor position has four rows, one for each possible nucleotide state:
+`A`, `C`, `G`, and `T`. The dataset keeps all model-specific PHACT columns from
+the source table rather than reducing them to one summary score.
+
+## Missing Values
+
+- `samples.tsv`: no MirGeneDB precursor IDs, family IDs, negative-mining
+  scores, or split-reason fields are provided, because those fields would leak
+  label provenance.
+- `phact_premirna_positions.tsv`: only human precursor-miRNA PHACT rows from
+  the source table are included.
+- `phact_premirna_index.tsv`: `has_all_four_nt_states=true` means every
+  precursor position has A/C/G/T rows in the score table.
 
 The PHACT files are optional global reference data. They are not a lookup table
 for every benchmark sample: the benchmark contains 71 species, while this PHACT
