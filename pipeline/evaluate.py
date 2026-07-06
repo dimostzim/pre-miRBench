@@ -378,7 +378,7 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
             ax.text(
                 bar.get_x() + bar.get_width() / 2.0,
                 height + 0.012,
-                f"{height * 100:.1f}%",
+                f"{height * 100:.1f}",
                 ha="center",
                 va="bottom",
                 fontsize=10,
