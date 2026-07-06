@@ -351,10 +351,10 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
     if not tools:
         return False
 
-    fig_width = max(12.0, 2.35 * len(tools) + 2.8)
-    fig, ax = plt.subplots(figsize=(fig_width, 5.0), dpi=160)
+    fig_width = max(13.0, 2.7 * len(tools) + 2.8)
+    fig, ax = plt.subplots(figsize=(fig_width, 5.4), dpi=160)
     x_positions = list(range(len(tools)))
-    total_group_width = 0.76
+    total_group_width = 0.82
     bar_width = total_group_width / max(1, len(splits)) if len(splits) > 1 else 0.55
     midpoint = (len(splits) - 1) / 2.0
 
@@ -366,7 +366,7 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
         bars = ax.bar(
             [position + offset for position in x_positions],
             heights,
-            width=bar_width * 0.92,
+            width=bar_width * 0.62,
             color=color,
             label=SPLIT_LABELS.get(split, split),
         )
@@ -381,24 +381,31 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
                 f"{height * 100:.1f}%",
                 ha="center",
                 va="bottom",
-                fontsize=7,
-                color="#334e68",
+                fontsize=10,
+                fontweight="bold",
+                color="#000000",
             )
 
-    ax.set_title("AUPRC by Tool", fontsize=13, fontweight="bold")
+    ax.set_title("AUPRC by Tool", fontsize=18, fontweight="bold", color="#000000")
     ax.set_xlabel("")
-    ax.set_ylabel("AUPRC")
+    ax.set_ylabel("AUPRC", fontsize=16, color="#000000")
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(tools, rotation=0, ha="center")
+    ax.set_xticklabels(tools, rotation=0, ha="center", fontsize=15, color="#000000")
+    ax.tick_params(axis="y", labelsize=13, colors="#000000")
     ax.set_ylim(0, 1.12)
     ax.grid(axis="y", color="#d8dee9", linewidth=0.8)
     ax.set_axisbelow(True)
-    ax.legend(
+    legend = ax.legend(
         frameon=False,
         loc="upper center",
         bbox_to_anchor=(0.5, -0.24),
         ncol=2 if len(splits) > 1 else 1,
+        fontsize=13,
     )
+    for text in legend.get_texts():
+        text.set_color("#000000")
+    for spine in ax.spines.values():
+        spine.set_color("#000000")
     fig.tight_layout(rect=(0, 0.12, 1, 1))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, bbox_inches="tight")
@@ -884,8 +891,19 @@ def run_evaluation(args):
         for split in splits:
             input_path, labels = make_labeled_input(dataset_dir, eval_dir, tool, split)
             output_dir = eval_dir / "raw" / tool / split
+            scores = None
             if not args.skip_inference:
-                if args.resume and has_raw_output(output_dir):
+                if args.resume and has_raw_output(output_dir) and not args.dry_run:
+                    try:
+                        scores = parse_predictions(tool, output_dir, labels, config)
+                        print(f"### {tool} {split} (resume: using existing raw output)")
+                    except (FileNotFoundError, ValueError) as error:
+                        print(f"### {tool} {split} (resume: existing raw output incomplete; rerunning)")
+                        print(f"resume reason: {error}")
+                        shutil.rmtree(output_dir)
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+                elif args.resume and has_raw_output(output_dir):
                     print(f"### {tool} {split} (resume: using existing raw output)")
                 else:
                     print(f"### {tool} {split}")
@@ -899,7 +917,8 @@ def run_evaluation(args):
                 mode = "--skip-inference" if args.skip_inference else "inference"
                 raise FileNotFoundError(f"Missing raw output after {mode}: {output_dir}")
 
-            scores = parse_predictions(tool, output_dir, labels, config)
+            if scores is None:
+                scores = parse_predictions(tool, output_dir, labels, config)
             rows = prediction_rows(tool, split, labels, scores)
             all_predictions.extend(rows)
             metrics.append(metric_row(tool, split, rows))
