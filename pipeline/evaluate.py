@@ -402,8 +402,8 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
     return True
 
 
-def build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts):
-    input_arg = train_helpers.container_path(str(root), input_path, mounts)
+def build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts, input_arg_override=None):
+    input_arg = input_arg_override or train_helpers.container_path(str(root), input_path, mounts)
     output_arg = train_helpers.container_path(str(root), output_dir, mounts, read_only=False)
     args = [f"/opt/{tool}/inference.py"]
 
@@ -465,13 +465,22 @@ def build_inference_args(tool, root, train_helpers, config, input_path, output_d
     return args
 
 
-def add_runtime_mounts(tool, root, eval_dir, split, cmd):
+def deepmir_runtime_input(input_path, runtime_dir, mounts):
+    input_dir = runtime_dir / "input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    runtime_input = input_dir / input_path.name
+    shutil.copy2(input_path, runtime_input)
+    mounts[str(input_dir)] = f"{input_dir}:{input_dir}"
+    return str(runtime_input)
+
+
+def add_runtime_mounts(tool, root, eval_dir, split, cmd, reset_runtime=True):
     wrapper = root / "tools" / tool / "inference.py"
     if wrapper.is_file():
         cmd.extend(["-v", f"{wrapper}:/opt/{tool}/inference.py:ro"])
 
     scratch_dir = eval_dir / "_runtime" / tool / split
-    if scratch_dir.exists():
+    if reset_runtime and scratch_dir.exists():
         shutil.rmtree(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
@@ -499,7 +508,28 @@ def stream_command(cmd):
 
 def run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=False):
     mounts = {}
-    tool_args = build_inference_args(tool, root, train_helpers, config, input_path, output_dir, mounts)
+    split = input_path.stem
+    runtime_dir = eval_dir / "_runtime" / tool / split
+    input_arg_override = None
+    reset_runtime = True
+
+    if tool == "deepmir":
+        if runtime_dir.exists():
+            shutil.rmtree(runtime_dir)
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        input_arg_override = deepmir_runtime_input(input_path, runtime_dir, mounts)
+        reset_runtime = False
+
+    tool_args = build_inference_args(
+        tool,
+        root,
+        train_helpers,
+        config,
+        input_path,
+        output_dir,
+        mounts,
+        input_arg_override=input_arg_override,
+    )
 
     cmd = [
         "docker",
@@ -520,7 +550,7 @@ def run_inference(tool, root, train_helpers, config, input_path, output_dir, eva
     ]
     for mount in mounts.values():
         cmd.extend(["-v", mount])
-    add_runtime_mounts(tool, root, eval_dir, input_path.stem, cmd)
+    add_runtime_mounts(tool, root, eval_dir, split, cmd, reset_runtime=reset_runtime)
     cmd.extend(["--entrypoint", "python", f"{tool}:latest"])
     cmd.extend(tool_args)
 

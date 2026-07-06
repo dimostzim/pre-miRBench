@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import shutil
+import tempfile
 
 
 def main():
@@ -20,8 +21,12 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
 
-    # Create absolute path for input
+    # DeepMir uses pyfaidx, which writes a .fai index beside the FASTA. The
+    # evaluator mounts inputs read-only, so run the predictor on a writable copy.
     input_path = os.path.abspath(args.input)
+    temp_dir = tempfile.TemporaryDirectory()
+    writable_input = os.path.join(temp_dir.name, os.path.basename(input_path))
+    shutil.copy2(input_path, writable_input)
 
     # The original predictor.py script runs from its own directory
     # and creates output in user_data/{basename}/
@@ -30,7 +35,7 @@ def main():
     cmd = [
         sys.executable,
         "predictor.py",
-        input_path
+        writable_input,
     ]
 
     if os.path.isfile(args.model):
@@ -49,7 +54,7 @@ def main():
 
     subprocess.check_call(cmd, cwd=deepmir_src, env=env)
 
-    input_basename = os.path.basename(input_path).split('.')[0]
+    input_basename = os.path.basename(writable_input).split('.')[0]
     user_data_dir = os.path.join(deepmir_src, "user_data", input_basename)
 
     if os.path.exists(user_data_dir):
