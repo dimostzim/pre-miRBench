@@ -351,7 +351,7 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
     if not tools:
         return False
 
-    fig_width = max(10.0, 1.8 * len(tools) + 2.5)
+    fig_width = max(12.0, 2.35 * len(tools) + 2.8)
     fig, ax = plt.subplots(figsize=(fig_width, 5.0), dpi=160)
     x_positions = list(range(len(tools)))
     total_group_width = 0.76
@@ -373,13 +373,24 @@ def write_auprc_bar_plot_png(path, metric_rows, splits=DEFAULT_SPLITS):
         for bar, is_present in zip(bars, present):
             if not is_present:
                 bar.set_alpha(0.0)
+                continue
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height + 0.012,
+                f"{height * 100:.1f}%",
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                color="#334e68",
+            )
 
     ax.set_title("AUPRC by Tool", fontsize=13, fontweight="bold")
     ax.set_xlabel("")
     ax.set_ylabel("AUPRC")
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(tools, rotation=28, ha="right")
-    ax.set_ylim(0, 1.05)
+    ax.set_xticklabels(tools, rotation=0, ha="center")
+    ax.set_ylim(0, 1.12)
     ax.grid(axis="y", color="#d8dee9", linewidth=0.8)
     ax.set_axisbelow(True)
     ax.legend(
