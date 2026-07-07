@@ -27,31 +27,10 @@ DEFAULT_PHACT_PREMIRNA_POSITIONS = (
 SAMPLE_FIELDS = [
     "id",
     "species",
-    "chrom",
-    "start_0based",
-    "end_0based",
-    "strand",
-    "window_length",
     "sequence_rna",
-    "sequence_dna",
-    "canonical_100nt_sequence_rna",
-    "canonical_100nt_sequence_dna",
     "structure",
     "mfe",
-    "gc_fraction",
 ]
-
-
-def dna_sequence(sequence):
-    return sequence.upper().replace("U", "T")
-
-
-def gc_fraction(sequence):
-    seq = dna_sequence(sequence)
-    if not seq:
-        return ""
-    gc = seq.count("G") + seq.count("C")
-    return f"{gc / len(seq):.6f}"
 
 
 def phact_family_from_premirna_id(premirna_id):
@@ -149,8 +128,8 @@ Predict whether each RNA window is a precursor-miRNA candidate.
 The prediction unit is `id`. Labels are stored in each split's `labels.csv`.
 Inputs are stored under each split's `input/` directory.
 
-This is a sequence classification task. A model should use the provided RNA
-window sequence and optional derived features/reference tables to predict the
+This is a sequence classification task. A model should use the provided 200-nt
+RNA window sequence and optional RNAfold/reference features to predict the
 binary label for each sample ID.
 
 ## Splits
@@ -206,22 +185,14 @@ One row per precursor-miRNA candidate window.
 |---|---|
 | `id` | Neutral split-local sample ID matching `labels.csv.id`. |
 | `species` | MirGeneDB species code. |
-| `chrom` | Sequence/chromosome name in the combined benchmark genome. |
-| `start_0based` | 0-based inclusive window start coordinate. |
-| `end_0based` | 0-based exclusive window end coordinate. |
-| `strand` | Genomic strand. |
-| `window_length` | Full RNA window length. |
-| `sequence_rna` | Full RNA window sequence. |
-| `sequence_dna` | Same sequence with U converted to T. |
-| `canonical_100nt_sequence_rna` | Centered 100-nt sequence used for leakage control in pre-miRBench. |
-| `canonical_100nt_sequence_dna` | DNA alphabet version of the centered 100-nt sequence. |
-| `structure` | RNAfold dot-bracket structure for the full window. |
-| `mfe` | RNAfold minimum free energy for the full window. |
-| `gc_fraction` | GC fraction of the full window. |
+| `sequence_rna` | Full 200-nt RNA window sequence. |
+| `structure` | RNAfold dot-bracket structure for the 200-nt window. |
+| `mfe` | RNAfold minimum free energy for the 200-nt window. |
 
 The exported sample table intentionally omits original pre-miRBench record IDs,
-MirGeneDB precursor IDs, family IDs, negative-mining scores, and split reasons
-because those fields encode label provenance and would leak the answer.
+genomic coordinates, MirGeneDB precursor IDs, family IDs, negative-mining
+scores, internal leakage-control sequences, and split reasons. These fields are
+provenance/internal benchmark fields, and some encode label provenance.
 
 ## PHACT Reference Tables
 
@@ -284,9 +255,10 @@ the source table rather than reducing them to one summary score.
 
 ## Missing Values
 
-- `samples.tsv`: no MirGeneDB precursor IDs, family IDs, negative-mining
-  scores, or split-reason fields are provided, because those fields would leak
-  label provenance.
+- `samples.tsv`: no genomic coordinates, MirGeneDB precursor IDs, family IDs,
+  negative-mining scores, internal leakage-control sequences, or split-reason
+  fields are provided. The modeling input is the 200-nt RNA window plus RNAfold
+  structure/MFE and species code.
 - `phact_premirna_positions.tsv`: only human precursor-miRNA PHACT rows from
   the source table are included.
 - `phact_premirna_index.tsv`: `has_all_four_nt_states=true` means every
@@ -295,8 +267,7 @@ the source table rather than reducing them to one summary score.
 The PHACT files are optional global reference data. They are not a lookup table
 for every benchmark sample: the benchmark contains 71 species, while this PHACT
 reference is human precursor-level data. The sample table deliberately does not
-include MirGeneDB precursor IDs or family IDs, because those fields identify
-positive examples and would leak the label.
+include MirGeneDB precursor IDs or family IDs.
 """
     (dataset_dir / "dataset_description.md").write_text(description)
 
@@ -325,24 +296,14 @@ def make_split(split_dir, rows, phact_path, phact_index_path):
         for row in rows:
             sample_id = row["agentomics_id"]
             sequence = row["sequence"]
-            canonical = row["canonical_100nt_sequence"]
             label_writer.writerow({"id": sample_id, "label": row["label"]})
             sample_writer.writerow(
                 {
                     "id": sample_id,
                     "species": row["species"],
-                    "chrom": row["chrom"],
-                    "start_0based": row["start"],
-                    "end_0based": row["end"],
-                    "strand": row["strand"],
-                    "window_length": len(sequence),
                     "sequence_rna": sequence,
-                    "sequence_dna": dna_sequence(sequence),
-                    "canonical_100nt_sequence_rna": canonical,
-                    "canonical_100nt_sequence_dna": dna_sequence(canonical),
                     "structure": row["structure"],
                     "mfe": row["mfe"],
-                    "gc_fraction": gc_fraction(sequence),
                 }
             )
 
