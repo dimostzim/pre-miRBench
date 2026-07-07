@@ -227,6 +227,11 @@ def write_table(path, rows, fieldnames):
             writer.writerow(row)
 
 
+def read_table(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
 def as_float(value):
     if value in (None, ""):
         return None
@@ -323,6 +328,10 @@ def write_auprc_bar_plot(path, metric_rows, splits=DEFAULT_SPLITS):
             bar_height = baseline - y
             color = SPLIT_COLORS.get(split, "#6b7280")
             lines.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}" fill="{color}"/>')
+            lines.append(
+                f'<text class="value" x="{x + bar_width / 2:.1f}" y="{y - 5:.1f}" text-anchor="middle">'
+                f"{value:.3f}</text>"
+            )
 
     lines.append("</svg>")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -839,6 +848,7 @@ def parse_args():
     parser.add_argument("--resume", action="store_true", help="Reuse non-empty raw output directories instead of rerunning them.")
     parser.add_argument("--allow-missing", action="store_true", help="Skip tools whose trained inference_config.yaml is missing.")
     parser.add_argument("--dry-run", action="store_true", help="Print Docker commands without running them.")
+    parser.add_argument("--plot-only", action="store_true", help="Read <output-dir>/metrics.csv and write AUPRC plots only.")
     parser.add_argument("--log-file", help="Optional log path. Defaults to <output-dir>/run.log.txt.")
     return parser.parse_args()
 
@@ -978,7 +988,18 @@ def main():
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             print(f"Writing evaluation log: {log_path}")
             try:
-                run_evaluation(args)
+                if args.plot_only:
+                    metrics_path = eval_dir / "metrics.csv"
+                    if not metrics_path.is_file():
+                        raise FileNotFoundError(f"Missing metrics.csv for --plot-only: {metrics_path}")
+                    metrics = read_table(metrics_path)
+                    splits = parse_csv_list(args.splits, DEFAULT_SPLITS)
+                    if write_auprc_bar_plot(eval_dir / "auprc_by_tool.svg", metrics, splits=splits):
+                        print(f"Wrote AUPRC plot: {eval_dir / 'auprc_by_tool.svg'}")
+                    if write_auprc_bar_plot_png(eval_dir / "auprc_by_tool.png", metrics, splits=splits):
+                        print(f"Wrote AUPRC plot: {eval_dir / 'auprc_by_tool.png'}")
+                else:
+                    run_evaluation(args)
             except Exception:
                 traceback.print_exc()
                 return 1
