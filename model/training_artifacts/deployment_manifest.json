@@ -1,0 +1,65 @@
+{
+  "aggregation": "weighted_arithmetic_sigmoid_probability",
+  "best_new_epoch": 32,
+  "candidate_validation_metrics": {
+    "candidate_1_iteration44_exact": {
+      "auprc": 0.9852677419143232,
+      "brier": 0.00859499013772378,
+      "checkpoints": 3,
+      "log_loss": 0.040060152089404596
+    },
+    "candidate_2_new_rc_tta_alone": {
+      "auprc": 0.9788332369276493,
+      "brier": 0.007837076845441864,
+      "checkpoints": 1,
+      "log_loss": 0.05588017034586454
+    },
+    "candidate_3_replace_pair_rc_tta_seed8675309": {
+      "auprc": 0.9830966177748558,
+      "brier": 0.007741493051735308,
+      "checkpoints": 3,
+      "log_loss": 0.04301439866213333
+    },
+    "candidate_4_replace_species_rc_augmented_seed57721": {
+      "auprc": 0.9848264627307421,
+      "brier": 0.008167938614071439,
+      "checkpoints": 3,
+      "log_loss": 0.03957896871359663
+    },
+    "candidate_5_replace_species_new_seed271828": {
+      "auprc": 0.9845557326700154,
+      "brier": 0.008173178041552133,
+      "checkpoints": 3,
+      "log_loss": 0.04002539804623176
+    }
+  },
+  "classification_threshold": 0.5,
+  "components": [
+    {
+      "architecture": "PairMessageCNN",
+      "name": "pair_rc_tta_seed8675309",
+      "rc_tta": true,
+      "state_index": 0,
+      "weight": 0.3333333333333333
+    },
+    {
+      "architecture": "SpeciesGraphGRU",
+      "name": "species_rc_augmented_seed57721",
+      "rc_tta": true,
+      "state_index": 0,
+      "weight": 0.3333333333333333
+    },
+    {
+      "architecture": "SpeciesGraphGRU",
+      "name": "species_new_seed271828",
+      "rc_tta": false,
+      "state_index": 1,
+      "weight": 0.3333333333333333
+    }
+  ],
+  "format_version": 3,
+  "model_file": "model.pt",
+  "model_sha256": "35e78bd6aa1c4ceb8c5226983e00f5863d0027ca92d5e7cc7c3bd53275b429e5",
+  "new_component_uses_raw_rc_tta": true,
+  "selected_candidate": "candidate_1_iteration44_exact"
+}

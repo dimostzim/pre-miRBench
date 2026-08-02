@@ -1,0 +1,38 @@
+{
+  "agentomics": {
+    "agent_id": "thicker_lion_wandered",
+    "agentomics_commit": "3c45e147666d82e980a2ecc83156908319946bf2",
+    "agentomics_version": "1.0.4",
+    "best_snapshot_iteration": 45,
+    "development_iterations": 50,
+    "model": "gpt-5.6-sol",
+    "provider": "Codex",
+    "selected_deployment": "candidate_1_iteration44_exact",
+    "source_snapshot_commit": "ea8a4138625d469e35e1b480c4fae8fff9c21d1e",
+    "validation_auprc": 0.9852678288766213,
+    "wandb_run_id": "oae57z3x",
+    "wandb_url": "https://wandb.ai/ceitec-ai/premirbench-agentomics/runs/oae57z3x"
+  },
+  "dataset": {
+    "name": "premirbench_mirgenedb71",
+    "test_heldout_species_heldout_family": 759,
+    "test_heldout_species_known_family": 2277,
+    "test_known_species_heldout_family": 7447,
+    "test_known_species_known_family": 7777,
+    "train": 52415,
+    "validation": 6941
+  },
+  "deployment": {
+    "aggregation": "equal-weight arithmetic mean of sigmoid probabilities",
+    "components": 3,
+    "model_sha256": "35e78bd6aa1c4ceb8c5226983e00f5863d0027ca92d5e7cc7c3bd53275b429e5",
+    "total_trainable_parameters": 1178309
+  },
+  "test_auprc": {
+    "mean": 0.9809319753479972,
+    "test_heldout_species_heldout_family": 0.9659273174405459,
+    "test_heldout_species_known_family": 0.9895233500064964,
+    "test_known_species_heldout_family": 0.981334226190312,
+    "test_known_species_known_family": 0.9869430077546343
+  }
+}

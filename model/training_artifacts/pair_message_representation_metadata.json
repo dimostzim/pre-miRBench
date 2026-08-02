@@ -1,0 +1,34 @@
+{
+  "label_column": "numeric_label",
+  "length": 200,
+  "mfe_mean": -63.7392257941429,
+  "mfe_std": 12.80349840581459,
+  "mfe_std_definition": "population standard deviation (ddof=0), training split only",
+  "num_channels": 12,
+  "partner_offset_channel": 11,
+  "partner_offset_scale": 199.0,
+  "partner_sequence_channels": {
+    "A": 7,
+    "C": 8,
+    "G": 9,
+    "U": 10
+  },
+  "sequence_channels": {
+    "A": 0,
+    "C": 1,
+    "G": 2,
+    "U": 3
+  },
+  "sequence_normalization": "strip whitespace, uppercase, T->U",
+  "structure_channels": {
+    "(": 5,
+    ")": 6,
+    ".": 4
+  },
+  "unknown_encoding": "zeros in own and partner nucleotide one-hot channels",
+  "unknown_sequence_symbol": "N",
+  "unpaired_partner_index": "self",
+  "uses_id_as_feature": false,
+  "uses_species": false,
+  "version": 2
+}

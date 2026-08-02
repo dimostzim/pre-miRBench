@@ -1,0 +1,59 @@
+{
+  "architecture_name": "SpeciesGraphGRU",
+  "architecture_version": 1,
+  "input_contract": {
+    "channels": "float [B,12,200]",
+    "global_features": "float [B,13], standardized from the training split",
+    "partner_indices": "int64 [B,200], paired position or self when unpaired",
+    "species_indices": "int64 [B], 0 unknown and 1..69 known"
+  },
+  "model_config": {
+    "avg_pool_bins": 10,
+    "classifier_dropout": 0.35,
+    "classifier_hidden": 128,
+    "global_features": 13,
+    "graph_dilations": [1, 2, 4],
+    "graph_dropout": 0.15,
+    "gru_hidden_size": 64,
+    "input_channels": 12,
+    "local_kernel_long": 15,
+    "local_kernel_short": 5,
+    "num_species": 69,
+    "sequence_length": 200,
+    "species_dropout": 0.3,
+    "species_embedding_dim": 16,
+    "stem_kernel_size": 7,
+    "stem_width": 96
+  },
+  "output_contract": "one binary-classification logit per row",
+  "trainable_parameters_per_checkpoint": 495586,
+  "training": {
+    "batch_size": 256,
+    "checkpoint_parameters": "exponential moving average",
+    "early_stopping_patience": 7,
+    "ema_decay": 0.999,
+    "epochs_max": 35,
+    "gradient_clip_norm": 2.0,
+    "learning_rate": 0.0005,
+    "loss": "BCEWithLogitsLoss",
+    "optimizer": "AdamW",
+    "positive_class_weight": 5.0,
+    "scheduler": "ReduceLROnPlateau on validation AP",
+    "species_unknown_replacement_probability": 0.15,
+    "weight_decay": 0.0003
+  },
+  "deployed_checkpoints": [
+    {
+      "name": "species_rc_augmented_seed57721",
+      "reverse_complement_augmentation": true,
+      "reverse_complement_test_time_averaging": true,
+      "seed": 57721
+    },
+    {
+      "name": "species_new_seed271828",
+      "reverse_complement_augmentation": false,
+      "reverse_complement_test_time_averaging": false,
+      "seed": 271828
+    }
+  ]
+}

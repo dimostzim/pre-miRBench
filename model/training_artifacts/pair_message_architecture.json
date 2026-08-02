@@ -1,0 +1,44 @@
+{
+  "architecture_name": "PairMessageCNN",
+  "architecture_version": 1,
+  "input_contract": {
+    "channels": "float [B,12,200]",
+    "mfe": "float [B,1], standardized from the training split",
+    "partner_indices": "int64 [B,200], paired position or self when unpaired"
+  },
+  "model_config": {
+    "avg_pool_bins": 10,
+    "block_dropout": 0.15,
+    "block_kernel_size": 7,
+    "classifier_dropout": 0.35,
+    "conv_channels": 64,
+    "dilations": [1, 2, 4],
+    "hidden_dim": 64,
+    "input_channels": 12,
+    "mfe_features": 1,
+    "sequence_length": 200,
+    "stem_kernel_size": 7
+  },
+  "output_contract": "one binary-classification logit per row",
+  "trainable_parameters": 187137,
+  "training": {
+    "batch_size": 512,
+    "checkpoint_parameters": "exponential moving average",
+    "early_stopping_patience": 7,
+    "ema_decay": 0.999,
+    "epochs_max": 35,
+    "gradient_clip_norm": 2.0,
+    "learning_rate": 0.001,
+    "loss": "BCEWithLogitsLoss",
+    "optimizer": "AdamW",
+    "positive_class_weight": 5.0,
+    "reverse_complement_augmentation_probability": 0.5,
+    "scheduler": "ReduceLROnPlateau on validation AP",
+    "seed": 8675309,
+    "weight_decay": 0.0001
+  },
+  "deployment": {
+    "name": "pair_rc_tta_seed8675309",
+    "reverse_complement_test_time_averaging": true
+  }
+}

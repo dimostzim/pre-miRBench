@@ -36,11 +36,16 @@ pipeline/evaluate.py        score trained tools and write metrics/plots
 pipeline/export_agentomics_dataset.py
                             export the benchmark for Agentomics
 tools/<tool>/               Dockerfile plus train/inference adapter per tool
+model/                      released pre-miRBench model and uv workflows
 tests/                      unit tests and small fixtures
 ```
 
 Supported tools are `deepmir`, `deepmirgene`, `dnnpremir`, `mirdnn`, `mire2e`,
 and `mustard`.
+
+The pre-miRBench model, trained weights, record-level
+predictions, and standalone `uv` commands are documented in
+[`model/README.md`](model/README.md).
 
 ## Setup
 
@@ -260,11 +265,11 @@ Default output:
 
 ```text
 /home/dtzim01/agentomics-ml/datasets/premirbench_mirgenedb71/
-/home/dtzim01/agentomics-ml/test_datasets/premirbench_mirgenedb71/
 ```
 
-Public Agentomics splits are `train` and `validation`. The four benchmark test
-splits are hidden under `test_datasets/`.
+The export contains `train`, `validation`, and the four benchmark test splits.
+Agentomics excludes the `test_*` folders from agent-facing training data and
+uses them only for final evaluation.
 
 Each split contains:
 
@@ -272,8 +277,8 @@ Each split contains:
 labels.csv
 input/
   samples.tsv
-  phact_premirna_positions.tsv
-  phact_premirna_index.tsv
+  phact_premirna_positions.tsv  # optional
+  phact_premirna_index.tsv      # optional
 ```
 
 `samples.tsv` intentionally contains only modeling inputs:
@@ -292,6 +297,7 @@ provenance fields and can leak label or benchmark construction details.
 
 The PHACT files are optional global human precursor-miRNA reference tables. They
 are not keyed to every benchmark sample and should not be treated as labels.
+Pass `--omit-phact` to export only `samples.tsv` for each split.
 
 ## Useful Checks
 

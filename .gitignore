@@ -19,6 +19,8 @@ results/
 
 # Python/cache noise
 __pycache__/
+.venv/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
