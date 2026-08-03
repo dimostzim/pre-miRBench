@@ -2,7 +2,8 @@
 
 This directory contains the trained model files and record-level predictions
 for the six published precursor-miRNA predictors evaluated in pre-miRBench.
-Training and evaluation logs are included with the archived outputs.
+One successful training log for each predictor is included with the archived
+outputs.
 
 ## Published predictors
 
@@ -42,8 +43,8 @@ its four record-level prediction files are under
 
 ## Logs and integrity
 
-`logs/` preserves the training and evaluation logs from the six-predictor
-benchmark run. Verify the archived files from this directory with:
+`logs/` preserves one successful training log for each published predictor.
+Verify the archived files from this directory with:
 
 ```bash
 sha256sum -c checksums.sha256
