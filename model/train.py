@@ -19,7 +19,7 @@ from sklearn.metrics import average_precision_score
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from inference import DEFAULT_ARTIFACTS, load_module, resolve_device
+from inference import DEFAULT_ARTIFACTS, RUNTIME_ARTIFACTS, load_module, resolve_device
 
 
 MODEL_DIR = Path(__file__).resolve().parent
@@ -333,12 +333,12 @@ def train_pair_component(
                 "epoch": epoch,
                 "train_loss": loss_sum / sample_count,
                 "validation_loss": 0.5 * (plain_loss + rc_loss),
-                "validation_auprc": validation_ap,
+                "validation_ap": validation_ap,
             }
         )
         print(
             f"pair epoch={epoch} train_loss={loss_sum / sample_count:.6f} "
-            f"validation_auprc={validation_ap:.6f}",
+            f"validation_ap={validation_ap:.6f}",
             flush=True,
         )
         if validation_ap > best_ap:
@@ -359,7 +359,7 @@ def train_pair_component(
     return best_state, config, {
         "seed": PAIR_SEED,
         "best_epoch": best_epoch,
-        "best_validation_auprc": best_ap,
+        "best_validation_ap": best_ap,
         "history": history,
     }
 
@@ -460,12 +460,12 @@ def train_species_component(
                 "epoch": epoch,
                 "train_loss": loss_sum / sample_count,
                 "validation_loss": validation_loss,
-                "validation_auprc": validation_ap,
+                "validation_ap": validation_ap,
             }
         )
         print(
             f"{name} epoch={epoch} train_loss={loss_sum / sample_count:.6f} "
-            f"validation_auprc={validation_ap:.6f}",
+            f"validation_ap={validation_ap:.6f}",
             flush=True,
         )
         if validation_ap > best_ap:
@@ -487,7 +487,7 @@ def train_species_component(
         "seed": seed,
         "reverse_complement_augmentation": use_rc,
         "best_epoch": best_epoch,
-        "best_validation_auprc": best_ap,
+        "best_validation_ap": best_ap,
         "history": history,
     }
 
@@ -592,6 +592,10 @@ def main() -> None:
     torch.save(package, model_path)
     copy_runtime_sources(source, args.artifacts_dir)
     model_sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    runtime_hashes = {
+        name: hashlib.sha256((args.artifacts_dir / name).read_bytes()).hexdigest()
+        for name in RUNTIME_ARTIFACTS
+    }
     components = [
         {
             "name": "pair_rc_tta_seed8675309",
@@ -619,6 +623,7 @@ def main() -> None:
         "format_version": 3,
         "model_file": "model.pt",
         "model_sha256": model_sha256,
+        "runtime_artifact_sha256": runtime_hashes,
         "selected_candidate": "fixed_three_component_retraining",
         "aggregation": "weighted_arithmetic_sigmoid_probability",
         "components": components,

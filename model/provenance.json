@@ -9,7 +9,7 @@
     "provider": "Codex",
     "selected_deployment": "candidate_1_iteration44_exact",
     "source_snapshot_commit": "ea8a4138625d469e35e1b480c4fae8fff9c21d1e",
-    "validation_auprc": 0.9852678288766213,
+    "validation_ap": 0.9852678288766213,
     "wandb_run_id": "oae57z3x",
     "wandb_url": "https://wandb.ai/ceitec-ai/premirbench-agentomics/runs/oae57z3x"
   },
@@ -28,7 +28,7 @@
     "model_sha256": "35e78bd6aa1c4ceb8c5226983e00f5863d0027ca92d5e7cc7c3bd53275b429e5",
     "total_trainable_parameters": 1178309
   },
-  "test_auprc": {
+  "test_ap": {
     "mean": 0.9809319753479972,
     "test_heldout_species_heldout_family": 0.9659273174405459,
     "test_heldout_species_known_family": 0.9895233500064964,

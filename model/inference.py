@@ -21,6 +21,14 @@ from torch.utils.data import DataLoader, Dataset
 MODEL_DIR = Path(__file__).resolve().parent
 DEFAULT_ARTIFACTS = MODEL_DIR / "training_artifacts"
 REQUIRED_OUTPUT_COLUMNS = ["id", "prediction", "probability_0", "probability_1"]
+RUNTIME_ARTIFACTS = (
+    "data_representation.py",
+    "model.py",
+    "pair_message_model.py",
+    "pair_message_representation.py",
+    "pair_message_representation_metadata.json",
+    "representation_metadata.json",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,6 +84,7 @@ def load_manifest(artifacts: Path) -> dict[str, Any]:
         "format_version",
         "model_file",
         "model_sha256",
+        "runtime_artifact_sha256",
         "aggregation",
         "components",
         "classification_threshold",
@@ -114,6 +123,17 @@ def load_manifest(artifacts: Path) -> dict[str, Any]:
     model_path = artifacts / manifest["model_file"]
     if not model_path.is_file() or sha256(model_path) != manifest["model_sha256"]:
         raise RuntimeError("Model artifact SHA-256 does not match deployment manifest")
+
+    runtime_hashes = manifest["runtime_artifact_sha256"]
+    if (
+        not isinstance(runtime_hashes, dict)
+        or set(runtime_hashes) != set(RUNTIME_ARTIFACTS)
+    ):
+        raise ValueError("Manifest runtime artifact hashes are incomplete")
+    for name in RUNTIME_ARTIFACTS:
+        runtime_path = artifacts / name
+        if not runtime_path.is_file() or sha256(runtime_path) != runtime_hashes[name]:
+            raise RuntimeError(f"Runtime artifact SHA-256 mismatch: {name}")
     return manifest
 
 

@@ -85,7 +85,7 @@ def calculate_metrics(predictions: pd.DataFrame, labels: pd.DataFrame) -> dict[s
         "n": int(len(target)),
         "positives": int(target.sum()),
         "negatives": int(len(target) - target.sum()),
-        "AUPRC": float(average_precision_score(target, probability)),
+        "AP": float(average_precision_score(target, probability)),
         "AUROC": float(roc_auc_score(target, probability)),
         "ACC": float(accuracy_score(target, predicted)),
         "PRECISION": float(precision_score(target, predicted, zero_division=0)),
@@ -123,12 +123,12 @@ def main() -> None:
         metrics_path = output_path.with_suffix(".metrics.json")
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n")
         rows.append({"test_split": split_name, **metrics})
-        print(f"{split_name}: AUPRC={metrics['AUPRC']:.12f}", flush=True)
+        print(f"{split_name}: AP={metrics['AP']:.12f}", flush=True)
 
     summary = pd.DataFrame(rows)
     mean_row = {"test_split": "mean"}
     for column in (
-        "AUPRC",
+        "AP",
         "AUROC",
         "ACC",
         "PRECISION",

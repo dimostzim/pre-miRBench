@@ -33,8 +33,6 @@ pipeline/download_data.sh   download MirGeneDB BED files and genome FASTA files
 pipeline/build_dataset.py   build dataset.csv, genome.fa, split reports, tool inputs
 pipeline/train.py           train one supported tool with Docker
 pipeline/evaluate.py        score trained tools and write metrics/plots
-pipeline/export_agentomics_dataset.py
-                            export the benchmark for Agentomics
 tools/<tool>/               Dockerfile plus train/inference adapter per tool
 model/                      released pre-miRBench model and uv workflows
 tests/                      unit tests and small fixtures
@@ -252,52 +250,6 @@ python pipeline/evaluate.py \
   --output-dir "$EVAL_OUT" \
   --plot-only
 ```
-
-## Agentomics Export
-
-Export the benchmark to Agentomics format:
-
-```bash
-python pipeline/export_agentomics_dataset.py --overwrite
-```
-
-Default output:
-
-```text
-/home/dtzim01/agentomics-ml/datasets/premirbench_mirgenedb71/
-```
-
-The export contains `train`, `validation`, and the four benchmark test splits.
-Agentomics excludes the `test_*` folders from agent-facing training data and
-uses them only for final evaluation.
-
-Each split contains:
-
-```text
-labels.csv
-input/
-  samples.tsv
-  phact_premirna_positions.tsv  # optional
-  phact_premirna_index.tsv      # optional
-```
-
-`samples.tsv` intentionally contains only modeling inputs:
-
-```text
-id
-species
-sequence_rna
-structure
-mfe
-```
-
-It does not include coordinates, MirGeneDB IDs, family IDs, split reasons,
-negative-mining scores, or internal leakage-control sequences. Those are
-provenance fields and can leak label or benchmark construction details.
-
-The PHACT files are optional global human precursor-miRNA reference tables. They
-are not keyed to every benchmark sample and should not be treated as labels.
-Pass `--omit-phact` to export only `samples.tsv` for each split.
 
 ## Useful Checks
 

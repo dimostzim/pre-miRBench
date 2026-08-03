@@ -3,31 +3,31 @@
   "best_new_epoch": 32,
   "candidate_validation_metrics": {
     "candidate_1_iteration44_exact": {
-      "auprc": 0.9852677419143232,
+      "ap": 0.9852677419143232,
       "brier": 0.00859499013772378,
       "checkpoints": 3,
       "log_loss": 0.040060152089404596
     },
     "candidate_2_new_rc_tta_alone": {
-      "auprc": 0.9788332369276493,
+      "ap": 0.9788332369276493,
       "brier": 0.007837076845441864,
       "checkpoints": 1,
       "log_loss": 0.05588017034586454
     },
     "candidate_3_replace_pair_rc_tta_seed8675309": {
-      "auprc": 0.9830966177748558,
+      "ap": 0.9830966177748558,
       "brier": 0.007741493051735308,
       "checkpoints": 3,
       "log_loss": 0.04301439866213333
     },
     "candidate_4_replace_species_rc_augmented_seed57721": {
-      "auprc": 0.9848264627307421,
+      "ap": 0.9848264627307421,
       "brier": 0.008167938614071439,
       "checkpoints": 3,
       "log_loss": 0.03957896871359663
     },
     "candidate_5_replace_species_new_seed271828": {
-      "auprc": 0.9845557326700154,
+      "ap": 0.9845557326700154,
       "brier": 0.008173178041552133,
       "checkpoints": 3,
       "log_loss": 0.04002539804623176
@@ -61,5 +61,13 @@
   "model_file": "model.pt",
   "model_sha256": "35e78bd6aa1c4ceb8c5226983e00f5863d0027ca92d5e7cc7c3bd53275b429e5",
   "new_component_uses_raw_rc_tta": true,
+  "runtime_artifact_sha256": {
+    "data_representation.py": "741dc35673082051d0e558c2d86603c9d45210d999fb03c27f7490e62efec0e9",
+    "model.py": "b78f6159493e688f6dec91dab3c320ad59d9d8e4eca6547e6823df4e81cb13c0",
+    "pair_message_model.py": "5df2248a15c287d6b44225e8309b7cf500f3a911c4fc904286e89207a2dc3778",
+    "pair_message_representation.py": "fa659369b45d82177894c616bd81f346f398408428f32cd41b37f492400dec28",
+    "pair_message_representation_metadata.json": "fec9fb6b5580fb60cade123dea9c45b0d17fe9c6d3aa5461f55b22f02dee59ba",
+    "representation_metadata.json": "3ff057067c6c0cf882a98b0495af4fa06421a65eefd36319f7aff14903e29010"
+  },
   "selected_candidate": "candidate_1_iteration44_exact"
 }

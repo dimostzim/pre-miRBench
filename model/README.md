@@ -67,9 +67,9 @@ uv run python inference.py \
 ```
 
 The output has one row per input ID in the same order and the columns `id`,
-`prediction`, `probability_0`, and `probability_1`. The checkpoint SHA-256 is
-verified against `training_artifacts/deployment_manifest.json` before
-inference.
+`prediction`, `probability_0`, and `probability_1`. SHA-256 hashes for the
+checkpoint, architecture code, and fitted preprocessing metadata are verified
+against `training_artifacts/deployment_manifest.json` before inference.
 
 GPU execution is selected automatically when CUDA is available. Use
 `--device cpu` for CPU inference. Data-loader workers default to zero so the
@@ -87,14 +87,11 @@ uv run python evaluate.py \
 ```
 
 The command regenerates record-level predictions, per-test JSON metrics, and a
-combined `metrics.csv`. Both public `label` files and Agentomics-internal
-`numeric_label` files are accepted.
+combined `metrics.csv`. Both `label` and `numeric_label` columns are accepted.
 
 The committed `evaluation/` directory contains the predictions from the
 reported run. Its `*.metrics.json` files contain the complete metrics used by
-the manuscript. The `*.agentomics_metrics.json` files preserve the original
-six-field Agentomics summaries; their `F1` field is macro-averaged, whereas the
-manuscript reports positive-class F1 explicitly.
+the manuscript, including positive-class and macro-averaged F1.
 
 ## Training
 
