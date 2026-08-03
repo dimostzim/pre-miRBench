@@ -35,6 +35,7 @@ pipeline/train.py           train one supported tool with Docker
 pipeline/evaluate.py        score trained tools and write metrics/plots
 tools/<tool>/               Dockerfile plus train/inference adapter per tool
 model/                      released pre-miRBench model and uv workflows
+benchmarking_results/       archived baseline models, predictions, metrics, and logs
 tests/                      unit tests and small fixtures
 ```
 
@@ -44,6 +45,10 @@ and `mustard`.
 The pre-miRBench model, trained weights, record-level
 predictions, and standalone `uv` commands are documented in
 [`model/README.md`](model/README.md).
+
+The trained models, combined record-level predictions, metrics, and logs for the
+six published predictors are documented in
+[`benchmarking_results/README.md`](benchmarking_results/README.md).
 
 ## Setup
 

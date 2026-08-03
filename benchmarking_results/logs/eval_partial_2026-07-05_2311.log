@@ -1,0 +1,60 @@
+Writing evaluation log: /SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/run.log.txt
+### mirdnn test_known_species_known_family
+/opt/conda/envs/mirdnn/lib/python3.9/site-packages/torch/nn/modules/conv.py:309: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv1d(input, weight, bias, self.stride,
+mirdnn test_known_species_known_family: scored 7777/7777 AUPRC=0.9844732371413921
+### mirdnn test_known_species_heldout_family
+/opt/conda/envs/mirdnn/lib/python3.9/site-packages/torch/nn/modules/conv.py:309: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv1d(input, weight, bias, self.stride,
+mirdnn test_known_species_heldout_family: scored 7447/7447 AUPRC=0.956104258086064
+### mirdnn test_heldout_species_known_family
+/opt/conda/envs/mirdnn/lib/python3.9/site-packages/torch/nn/modules/conv.py:309: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv1d(input, weight, bias, self.stride,
+mirdnn test_heldout_species_known_family: scored 2277/2277 AUPRC=0.9852563042495887
+### mirdnn test_heldout_species_heldout_family
+/opt/conda/envs/mirdnn/lib/python3.9/site-packages/torch/nn/modules/conv.py:309: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv1d(input, weight, bias, self.stride,
+mirdnn test_heldout_species_heldout_family: scored 759/759 AUPRC=0.9112740601185629
+### deepmir test_known_species_known_family
+Traceback (most recent call last):
+  File "/opt/conda/envs/deepmir/lib/python3.8/site-packages/pyfaidx/__init__.py", line 814, in build_index
+    with self._open_fai(mode='w') as target:
+  File "/opt/conda/envs/deepmir/lib/python3.8/site-packages/pyfaidx/__init__.py", line 879, in _open_fai
+    return open(self.indexname, mode=mode)
+PermissionError: [Errno 13] Permission denied: '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa.fai'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "predictor.py", line 164, in <module>
+    seq_fold_dict = generate_hairpin_images(input_filename, data_directory)
+  File "predictor.py", line 28, in generate_hairpin_images
+    sequences = Fasta(fasta_filename)
+  File "/opt/conda/envs/deepmir/lib/python3.8/site-packages/pyfaidx/__init__.py", line 1292, in __init__
+    self.faidx = Faidx(
+  File "/opt/conda/envs/deepmir/lib/python3.8/site-packages/pyfaidx/__init__.py", line 628, in __init__
+    self.build_index()
+  File "/opt/conda/envs/deepmir/lib/python3.8/site-packages/pyfaidx/__init__.py", line 818, in build_index
+    raise IOError(
+OSError: /SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa.fai may not be writable. Please use Fasta(rebuild=False), Faidx(rebuild=False) or faidx --no-rebuild.
+Traceback (most recent call last):
+  File "/opt/deepmir/inference.py", line 72, in <module>
+    main()
+  File "/opt/deepmir/inference.py", line 50, in main
+    subprocess.check_call(cmd, cwd=deepmir_src, env=env)
+  File "/opt/conda/envs/deepmir/lib/python3.8/subprocess.py", line 364, in check_call
+    raise CalledProcessError(retcode, cmd)
+subprocess.CalledProcessError: Command '['/opt/conda/envs/deepmir/bin/python', 'predictor.py', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 927, in main
+    run_evaluation(args)
+    ~~~~~~~~~~~~~~^^^^^^
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 860, in run_evaluation
+    run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 530, in run_inference
+    stream_command(cmd)
+    ~~~~~~~~~~~~~~^^^^^
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 497, in stream_command
+    raise subprocess.CalledProcessError(return_code, cmd)
+subprocess.CalledProcessError: Command '['docker', 'run', '--rm', '--gpus', 'all', '--user', '1007:1007', '-e', 'HOME=/tmp', '-e', 'XDG_CACHE_HOME=/tmp/.cache', '-e', 'TF_FORCE_GPU_ALLOW_GROWTH=true', '-v', '/home/dtzim01/pre-miRBench:/work', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa:/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa:ro', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/raw/deepmir/test_known_species_known_family:/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/raw/deepmir/test_known_species_known_family', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/training/deepmir/mirgenedb71_1to10/model.h5:/SCRATCH/dtzim01/pre-miRBench/results/training/deepmir/mirgenedb71_1to10/model.h5:ro', '-v', '/home/dtzim01/pre-miRBench/tools/deepmir/inference.py:/opt/deepmir/inference.py:ro', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/_runtime/deepmir/test_known_species_known_family/user_data:/opt/deepmir/deepmir_src/user_data', '-v', '/home/dtzim01/pre-miRBench/tools/deepmir/runtime_predictor.py:/opt/deepmir/deepmir_src/predictor.py:ro', '--entrypoint', 'python', 'deepmir:latest', '/opt/deepmir/inference.py', '--input', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/inputs/deepmir/test_known_species_known_family.fa', '--output', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_partial/raw/deepmir/test_known_species_known_family', '--model', '/SCRATCH/dtzim01/pre-miRBench/results/training/deepmir/mirgenedb71_1to10/model.h5']' returned non-zero exit status 1.

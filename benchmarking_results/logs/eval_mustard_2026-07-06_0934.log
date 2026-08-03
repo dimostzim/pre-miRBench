@@ -1,0 +1,26 @@
+Writing evaluation log: /SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/run.log.txt
+### mustard test_known_species_known_family
+Traceback (most recent call last):
+  File "/opt/mustard/inference.py", line 146, in <module>
+    main()
+  File "/opt/mustard/inference.py", line 105, in main
+    patch_safe_chromosome_filenames(base_dir)
+  File "/opt/mustard/inference.py", line 65, in patch_safe_chromosome_filenames
+    format_path.write_text(format_text)
+  File "/opt/conda/envs/mustard/lib/python3.8/pathlib.py", line 1255, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors) as f:
+  File "/opt/conda/envs/mustard/lib/python3.8/pathlib.py", line 1222, in open
+    return io.open(self, mode, buffering, encoding, errors, newline,
+  File "/opt/conda/envs/mustard/lib/python3.8/pathlib.py", line 1078, in _opener
+    return self._accessor.open(self, flags, mode)
+PermissionError: [Errno 13] Permission denied: '/opt/mustard/mustard_src/src/lib/perl/Files/Format.pm'
+Traceback (most recent call last):
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 962, in main
+    run_evaluation(args)
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 895, in run_evaluation
+    run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 565, in run_inference
+    stream_command(cmd)
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 511, in stream_command
+    raise subprocess.CalledProcessError(return_code, cmd)
+subprocess.CalledProcessError: Command '['docker', 'run', '--rm', '--gpus', 'all', '--user', '1007:1007', '-e', 'HOME=/tmp', '-e', 'XDG_CACHE_HOME=/tmp/.cache', '-e', 'TF_FORCE_GPU_ALLOW_GROWTH=true', '-v', '/home/dtzim01/pre-miRBench:/work', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/inputs/mustard/test_known_species_known_family.bed:/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/inputs/mustard/test_known_species_known_family.bed:ro', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family:/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/training/mustard/mirgenedb71_1to10/CNNonRaw.hdf5:/SCRATCH/dtzim01/pre-miRBench/results/training/mustard/mirgenedb71_1to10/CNNonRaw.hdf5:ro', '-v', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family/intermediate:/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family/intermediate', '-v', '/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71/genome.fa:/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71/genome.fa', '-v', '/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71:/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71', '-v', '/home/dtzim01/pre-miRBench/tools/mustard/inference.py:/opt/mustard/inference.py:ro', '--entrypoint', 'python', 'mustard:latest', '/opt/mustard/inference.py', '--targetIntervals', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/inputs/mustard/test_known_species_known_family.bed', '--genome', '/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71/genome.fa', '--consDir', '/SCRATCH/dtzim01/pre-miRBench/datasets/mirgenedb_71', '--dir', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family', '--chromList', 'all', '--model', '/SCRATCH/dtzim01/pre-miRBench/results/training/mustard/mirgenedb71_1to10/CNNonRaw.hdf5', '--classNum', '2', '--modelType', 'CNN', '--winSize', '200', '--step', '5', '--staticPredFlag', '1', '--inputMode', 'sequence,RNAfold', '--threads', '10', '--modelDirName', 'results', '--intermDir', '/SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family/intermediate']' returned non-zero exit status 1.

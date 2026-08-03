@@ -1,0 +1,14 @@
+Writing evaluation log: /SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/run.log.txt
+### mustard test_known_species_known_family (resume: using existing raw output)
+Traceback (most recent call last):
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 962, in main
+    run_evaluation(args)
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 902, in run_evaluation
+    scores = parse_predictions(tool, output_dir, labels, config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 688, in parse_predictions
+    return parse_mustard(output_dir, mustard_positive_class_index(config))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dtzim01/pre-miRBench/pipeline/evaluate.py", line 664, in parse_mustard
+    raise FileNotFoundError(f"No MuStARD {class_name} BED predictions found under {output_dir}")
+FileNotFoundError: No MuStARD class_1 BED predictions found under /SCRATCH/dtzim01/pre-miRBench/results/evaluation/mirgenedb71_1to10_mustard_v3/raw/mustard/test_known_species_known_family
