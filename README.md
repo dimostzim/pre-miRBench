@@ -109,10 +109,10 @@ mirgenedb_71/
 Useful environment variables:
 
 ```bash
-export SCR=/SCRATCH/$USER/pre-miRBench
+export SCR=/SCRATCH/$USER/premirbench
 export DATASET=$SCR/datasets/mirgenedb_71
-export TRAIN_OUT=$SCR/results/training
-export EVAL_OUT=$SCR/results/evaluation/mirgenedb71_1to10
+export TRAIN_OUT=$SCR/models/new/training
+export EVAL_OUT=$SCR/comparisons/new/mirgenedb71_1to10
 ```
 
 ## Build The Dataset
@@ -120,16 +120,16 @@ export EVAL_OUT=$SCR/results/evaluation/mirgenedb71_1to10
 Download the 71-species panel:
 
 ```bash
-bash pipeline/download_data.sh "$SCR/raw/mirgenedb_71"
+bash pipeline/download_data.sh "$SCR/datasets/raw/mirgenedb_71"
 ```
 
 Build the canonical 1:10 dataset:
 
 ```bash
 python pipeline/build_dataset.py \
-  --panel "$SCR/raw/mirgenedb_71/panel.tsv" \
+  --panel "$SCR/datasets/raw/mirgenedb_71/panel.tsv" \
   --output-dir "$SCR/datasets/mirgenedb_71" \
-  --work-dir "$SCR/work/build_mirgenedb_71" \
+  --work-dir "$SCR/datasets/work/build_mirgenedb_71" \
   --ratio 10 \
   --cpus 8 \
   --species-jobs 12
@@ -139,9 +139,9 @@ Resume a partially completed build:
 
 ```bash
 python pipeline/build_dataset.py \
-  --panel "$SCR/raw/mirgenedb_71/panel.tsv" \
+  --panel "$SCR/datasets/raw/mirgenedb_71/panel.tsv" \
   --output-dir "$SCR/datasets/mirgenedb_71" \
-  --work-dir "$SCR/work/build_mirgenedb_71" \
+  --work-dir "$SCR/datasets/work/build_mirgenedb_71" \
   --ratio 10 \
   --cpus 8 \
   --species-jobs 12 \
@@ -277,3 +277,12 @@ Run unit tests:
 ```bash
 python -m unittest
 ```
+
+## Retained workspace
+
+The node 4 workspace is `/SCRATCH/dtzim01/premirbench/`. Its root README maps
+the retained dataset, Agentomics run, verification results and archived figures.
+The maintained node 4 checkout is `/home/dtzim01/pre-miRBench`; the Mac checkout
+is `/Users/nucleotaid/Projects/pre-miRBench`. Published weights and predictions
+remain versioned under `model/` and `benchmarking_results/`. Use new output
+directories for new runs; historical snapshots retain their original paths.
