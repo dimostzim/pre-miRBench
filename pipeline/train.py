@@ -10,7 +10,7 @@ except ImportError:
 
 
 TOOLS = ["mustard", "mire2e", "mirdnn", "dnnpremir", "deepmir", "deepmirgene"]
-SMOKE_INPUT = "tests/fixtures/tool_smoke_test.fa"
+SMOKE_INPUT = "pipeline/fixtures/tool_smoke_test.fa"
 
 
 def dataset_file(dataset_dir, tool, filename):

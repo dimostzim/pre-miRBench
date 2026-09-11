@@ -36,7 +36,6 @@ pipeline/evaluate.py        score trained tools and write metrics/plots
 tools/<tool>/               Dockerfile plus train/inference adapter per tool
 model/                      released pre-miRBench model and uv workflows
 benchmarking_results/       archived baseline models, predictions, metrics, and logs
-tests/                      unit tests and small fixtures
 ```
 
 Supported tools are `deepmir`, `deepmirgene`, `dnnpremir`, `mirdnn`, `mire2e`,
@@ -270,12 +269,6 @@ Check trained model artifacts:
 ```bash
 find "$TRAIN_OUT" -name inference_config.yaml | sort
 find "$TRAIN_OUT" -type f | grep -E '/(model\.h5|new_test\.hdf5|CNN_model\.h5|model\.pmt|predictor\.pkl|CNNonRaw\.hdf5)$' | sort
-```
-
-Run unit tests:
-
-```bash
-python -m unittest
 ```
 
 ## Retained workspace
