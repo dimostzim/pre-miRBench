@@ -7,85 +7,108 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
+from matplotlib.patches import FancyBboxPatch, Rectangle
 
 
-PARTITIONS = {
-    "Train": (69, 687, 4765, 47650),
-    "Validation": (61, 171, 631, 6310),
-    "Test 1": (62, 177, 707, 7070),
-    "Test 2": (61, 59, 677, 6770),
-    "Test 3": (2, 112, 207, 2070),
-    "Test 4": (2, 59, 69, 690),
-}
-
-
-def add_box(axis, x, y, width, height, title, subtitle, values, face, edge):
-    species, families, positives, negatives = values
+def labelled_box(axis, x, y, width, height, title, subtitle, color):
     axis.add_patch(
         FancyBboxPatch(
             (x, y),
             width,
             height,
-            boxstyle="round,pad=0.009,rounding_size=0.012",
-            facecolor=face,
-            edgecolor=edge,
-            linewidth=2.2,
+            boxstyle="round,pad=0.006,rounding_size=0.008",
+            facecolor="white",
+            edgecolor=color,
+            linewidth=2,
         )
     )
-    center = x + width / 2
-    axis.text(center, y + height * 0.72, title.upper(), ha="center", va="center", fontsize=17, fontweight="bold", color=edge)
-    axis.text(center, y + height * 0.52, subtitle, ha="center", va="center", fontsize=12.5, color="#263648")
-    axis.text(center, y + height * 0.31, f"{species} species  |  {families} families", ha="center", va="center", fontsize=12, color="#263648")
-    axis.text(center, y + height * 0.13, f"{positives:,} positive  |  {negatives:,} negative", ha="center", va="center", fontsize=12, color="#263648")
+    axis.text(
+        x + width / 2,
+        y + height * 0.62,
+        title,
+        ha="center",
+        va="center",
+        fontsize=16,
+        fontweight="bold",
+        color=color,
+    )
+    axis.text(
+        x + width / 2,
+        y + height * 0.31,
+        subtitle,
+        ha="center",
+        va="center",
+        fontsize=11,
+        color="#4B5563",
+    )
 
 
 def main():
-    assert sum(row[2] for row in PARTITIONS.values()) == 7056
-    assert sum(row[3] for row in PARTITIONS.values()) == 70560
-
-    figure, axis = plt.subplots(figsize=(14.8, 9.6))
+    figure, axis = plt.subplots(figsize=(11.5, 7.2))
     figure.patch.set_facecolor("white")
     axis.set_xlim(0, 1)
     axis.set_ylim(0, 1)
     axis.axis("off")
 
-    left = 0.27
-    width = 0.335
-    gap = 0.035
-    right = left + width + gap
+    axis.text(0.08, 0.89, "Development", fontsize=16, fontweight="bold", color="#263648")
+    labelled_box(axis, 0.30, 0.82, 0.27, 0.12, "TRAIN", "model fitting", "#315A84")
+    labelled_box(axis, 0.62, 0.82, 0.27, 0.12, "VALIDATION", "model selection", "#49734E")
 
-    axis.text(left, 0.955, "Development partitions", fontsize=19, fontweight="bold", color="#17365D")
-    axis.text(left, 0.925, "Used for model fitting and selection; shown separately from the test matrix", fontsize=11.5, color="#526274")
-    add_box(axis, left, 0.745, width, 0.15, "Train", "Model fitting", PARTITIONS["Train"], "#E6EEF8", "#244A73")
-    add_box(axis, right, 0.745, width, 0.15, "Validation", "Model selection", PARTITIONS["Validation"], "#EAF4E7", "#3B6B43")
+    axis.plot([0.08, 0.92], [0.755, 0.755], color="#D0D5DB", linewidth=1.2)
+    axis.text(0.08, 0.68, "Test sets", fontsize=16, fontweight="bold", color="#263648")
 
-    axis.text(left, 0.675, "Test partitions", fontsize=19, fontweight="bold", color="#17365D")
-    axis.text(left, 0.642, "A 2 × 2 design defined relative to the training partition", fontsize=11.5, color="#526274")
-
-    axis.text(0.635, 0.595, "miRNA-family status", ha="center", fontsize=14, fontweight="bold", color="#263648")
-    axis.text(left + width / 2, 0.557, "Represented in training", ha="center", fontsize=13, fontweight="bold", color="#263648")
-    axis.text(right + width / 2, 0.557, "Held out from training", ha="center", fontsize=13, fontweight="bold", color="#263648")
-
-    axis.text(0.125, 0.595, "Species status", ha="center", fontsize=14, fontweight="bold", color="#263648")
-    axis.text(0.245, 0.425, "Represented\nin training", ha="right", va="center", fontsize=13, fontweight="bold", color="#263648", linespacing=1.3)
-    axis.text(0.245, 0.205, "Held out\nfrom training", ha="right", va="center", fontsize=13, fontweight="bold", color="#263648", linespacing=1.3)
-
-    cell_height = 0.18
-    add_box(axis, left, 0.335, width, cell_height, "Test 1", "Known species + known family", PARTITIONS["Test 1"], "#E5F4E9", "#2F6B48")
-    add_box(axis, right, 0.335, width, cell_height, "Test 2", "Known species + held-out family", PARTITIONS["Test 2"], "#E4F3F6", "#267484")
-    add_box(axis, left, 0.115, width, cell_height, "Test 3", "Held-out species + known family", PARTITIONS["Test 3"], "#FFF2CE", "#95640A")
-    add_box(axis, right, 0.115, width, cell_height, "Test 4", "Held-out species + held-out family", PARTITIONS["Test 4"], "#EEE8F8", "#61439A")
+    left = 0.32
+    bottom = 0.12
+    cell_width = 0.27
+    cell_height = 0.20
+    column_gap = 0.05
+    row_gap = 0.06
+    right = left + cell_width + column_gap
+    top = bottom + cell_height + row_gap
 
     axis.text(
-        0.5,
-        0.045,
-        "All six partitions are record-disjoint   •   Species and family status are defined relative to training   •   Positive:negative ratio = 1:10",
+        (left + right + cell_width) / 2,
+        0.66,
+        "miRNA family",
         ha="center",
-        va="center",
-        fontsize=11.5,
-        color="#526274",
+        fontsize=13,
+        fontweight="bold",
+        color="#4B5563",
     )
+    axis.text(left + cell_width / 2, 0.60, "In training", ha="center", fontsize=12.5, fontweight="bold", color="#263648")
+    axis.text(right + cell_width / 2, 0.60, "Held out", ha="center", fontsize=12.5, fontweight="bold", color="#263648")
+
+    axis.text(0.20, 0.60, "Species", ha="center", fontsize=13, fontweight="bold", color="#4B5563")
+    axis.text(0.275, top + cell_height / 2, "In training", ha="right", va="center", fontsize=12.5, fontweight="bold", color="#263648")
+    axis.text(0.275, bottom + cell_height / 2, "Held out", ha="right", va="center", fontsize=12.5, fontweight="bold", color="#263648")
+
+    cells = (
+        (left, top, "TEST 1", "#315A84"),
+        (right, top, "TEST 2", "#267484"),
+        (left, bottom, "TEST 3", "#95640A"),
+        (right, bottom, "TEST 4", "#61439A"),
+    )
+    for x, y, title, color in cells:
+        axis.add_patch(
+            Rectangle(
+                (x, y),
+                cell_width,
+                cell_height,
+                facecolor="#FAFAFA",
+                edgecolor="#7B8490",
+                linewidth=1.5,
+            )
+        )
+        axis.text(
+            x + cell_width / 2,
+            y + cell_height / 2,
+            title,
+            ha="center",
+            va="center",
+            fontsize=20,
+            fontweight="bold",
+            color=color,
+        )
 
     output_dir = Path(__file__).resolve().parent
     figure.savefig(
