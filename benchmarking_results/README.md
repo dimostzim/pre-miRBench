@@ -33,6 +33,11 @@ column preserves the original pipeline field name; the values are average
 precision calculated by `pipeline/evaluate.py` and reported as AP in the
 manuscript.
 
+`predictions/premirbench_model.csv` aligns the pre-miRBench model scores with
+the canonical record IDs used by the published-predictor archive. The files in
+`uncertainty/` use these aligned predictions to calculate bootstrap intervals
+for AP and paired AP differences.
+
 ## pre-miRBench model
 
 The pre-miRBench implementation, checkpoint, fitted preprocessing metadata, and
