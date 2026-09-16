@@ -28,7 +28,7 @@ inputs are generated from the 200 nt windows.
 ## Repository Layout
 
 ```text
-panels/mirgenedb_71/        final species panel and build snapshot notes
+panels/mirgenedb_71/        species panel, input manifest, and build snapshot notes
 pipeline/download_data.sh   download MirGeneDB BED files and genome FASTA files
 pipeline/build_dataset.py   build dataset.csv, genome.fa, split reports, tool inputs
 pipeline/train.py           train one supported tool with Docker

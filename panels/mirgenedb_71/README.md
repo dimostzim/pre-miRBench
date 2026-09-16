@@ -6,6 +6,21 @@ Definition: 71 usable exact species total, composed of 69 strict full-exact spec
 
 The downloader uses `species_panel.tsv` as the source of truth. It downloads all MirGeneDB `_pre` rows, including v2/v3 precursor variants. `mml` and `pab` use the listed main genome FASTA plus the small FASTA/BED addenda under `supplements/`.
 
+`input_manifest.tsv` records the exact reference source, assembly name,
+provider-specific identifier, download URL, and sequence checksum for every
+species. The genome checksums were calculated from the retained combined FASTA
+used to build the benchmark. For each record, the pipeline-added `<code>__`
+prefix was removed from the header, sequence lines were concatenated, and a
+newline was added after the header and sequence. The `mml` and `pab` checksums
+therefore include their tracked supplemental contigs.
+
+The same manifest records SHA-256 checksums for the MirGeneDB source BED files
+retrieved on 2026-09-16 and for the precursor-only BED content passed to the
+normalization step. The latter contains all `_pre` rows and incorporates the
+tracked `mml` and `pab` BED replacements. The 71 verified files contain 12,053
+precursor rows in total, matching the raw manifest used for the 2026-07-04
+dataset build.
+
 Default raw download target:
 
 ```bash
