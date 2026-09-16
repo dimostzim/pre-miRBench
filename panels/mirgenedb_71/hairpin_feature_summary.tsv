@@ -1,0 +1,9 @@
+class	feature	n	minimum	q25	median	q75	maximum	mean	threshold	pass_count	pass_fraction
+positive	mfe	7056	-127.3	-71.5	-62.5	-55.3	-31.8	-64.5593	-10	7056	1.000000
+positive	paired_fraction	7056	0.37	0.59	0.63	0.66	0.79	0.625157	0.4	7055	0.999858
+positive	max_stem	7056	6	11	13	17	46	14.5762	8	7018	0.994615
+positive	max_unpaired_run	7056	4	10	12	16	58	13.469	25	6780	0.960884
+negative	mfe	70560	-162.5	-69.5	-60.5	-53.8	-16.4	-62.8533	-10	70560	1.000000
+negative	paired_fraction	70560	0.4	0.59	0.63	0.66	0.93	0.6244	0.4	70560	1.000000
+negative	max_stem	70560	8	11	13	16	87	14.1654	8	70560	1.000000
+negative	max_unpaired_run	70560	3	9	12	15	25	12.4377	25	70560	1.000000

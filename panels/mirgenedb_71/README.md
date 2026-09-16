@@ -26,6 +26,19 @@ each species and split. Its 71 species totals reproduce the benchmark counts:
 4,765 training, 631 validation, 707 Test 1, 677 Test 2, 207 Test 3, and 69 Test
 4 positives, for 7,056 positive windows overall.
 
+`hairpin_feature_distributions.png` compares the four RNAfold features in the
+final 7,056 positive and 70,560 negative windows and marks the permissive
+candidate-filtering thresholds. `hairpin_feature_summary.tsv` contains the
+underlying descriptive statistics and threshold pass rates. This comparison is
+descriptive: the final negative windows had already passed the four filters,
+and the thresholds were not fitted to these distributions. Recreate both files
+from the canonical dataset with:
+
+```bash
+python panels/mirgenedb_71/plot_hairpin_feature_distributions.py \
+  /path/to/dataset.csv
+```
+
 Default raw download target:
 
 ```bash
