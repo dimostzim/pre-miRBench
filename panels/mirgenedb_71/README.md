@@ -21,6 +21,11 @@ tracked `mml` and `pab` BED replacements. The 71 verified files contain 12,053
 precursor rows in total, matching the raw manifest used for the 2026-07-04
 dataset build.
 
+`positive_counts_by_species.tsv` reports the final positive-window count for
+each species and split. Its 71 species totals reproduce the benchmark counts:
+4,765 training, 631 validation, 707 Test 1, 677 Test 2, 207 Test 3, and 69 Test
+4 positives, for 7,056 positive windows overall.
+
 Default raw download target:
 
 ```bash
