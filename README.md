@@ -6,9 +6,9 @@ species and miRNA-family splits.
 
 The current benchmark target is `mirgenedb_71`: 71 MirGeneDB species whose
 precursor BED coordinates match the selected genome FASTA files. The canonical
-dataset is built as 200 nt RNA windows with a 1:10 positive:negative ratio.
+dataset uses 200 nt RNA windows and a 1:10 positive:negative ratio.
 
-## What The Pipeline Does
+## What the pipeline does
 
 ```text
 MirGeneDB BED + genome FASTA
@@ -17,37 +17,29 @@ MirGeneDB BED + genome FASTA
   -> mine hard negative hairpin-like 200 nt windows
   -> assign train/validation/test splits
   -> remove exact 100 nt prepared-input duplicates
-  -> write canonical dataset.csv and per-tool input files
-  -> train Dockerized tools
+  -> write dataset.csv, reports, and tool-specific inputs
+  -> train Dockerized published tools
   -> evaluate on four held-out test sets
 ```
 
-The 100 nt sequence is used only as the leakage-control key. The model/tool
-inputs are generated from the 200 nt windows.
+The 100 nt sequence is used only as the leakage-control key. Model/tool inputs
+are generated from the 200 nt windows.
 
-## Repository Layout
+## Repository layout
 
 ```text
-panels/mirgenedb_71/        species panel, provenance tables, and build snapshot notes
-pipeline/download_data.sh   download MirGeneDB BED files and genome FASTA files
-pipeline/build_dataset.py   build dataset.csv, genome.fa, split reports, tool inputs
-pipeline/train.py           train one supported tool with Docker
-pipeline/evaluate.py        score trained tools and write metrics/plots
+panels/mirgenedb_71/        species metadata, download URLs, provenance, supplements
+pipeline/download_data.sh   download and validate MirGeneDB BEDs and genome FASTAs
+pipeline/build.py            simple canonical dataset build entry point
+pipeline/build_dataset.py    full dataset builder used internally by build.py
+pipeline/train.py            train one supported tool with Docker
+pipeline/evaluate.py         score trained tools and write metrics/plots
 tools/<tool>/               Dockerfile plus train/inference adapter per tool
-model/                      released pre-miRBench model and uv workflows
-benchmarking_results/       archived baseline models, predictions, metrics, and logs
+pre-miRBench_model/          released pre-miRBench model files
 ```
 
-Supported tools are `deepmir`, `deepmirgene`, `dnnpremir`, `mirdnn`, `mire2e`,
-and `mustard`.
-
-The pre-miRBench model, trained weights, record-level
-predictions, and standalone `uv` commands are documented in
-[`model/README.md`](model/README.md).
-
-The trained models, combined record-level predictions, metrics, and logs for the
-six published predictors are documented in
-[`benchmarking_results/README.md`](benchmarking_results/README.md).
+Supported published tools are `deepmir`, `deepmirgene`, `dnnpremir`, `mirdnn`,
+`mire2e`, and `mustard`.
 
 ## Setup
 
@@ -58,16 +50,106 @@ conda env create -f pipeline/environment.yml
 conda activate premirbench
 ```
 
-Build the Docker images used for training and inference:
+The Conda environment contains the software needed for downloading and building
+the dataset, including Python 3.11, NumPy, SciPy, scikit-learn, PyYAML,
+`bedtools`, and ViennaRNA (`RNAfold`).
+
+Check the important command-line dependencies if needed:
+
+```bash
+python --version
+RNAfold --version
+bedtools --version
+curl --version
+```
+
+Docker is not installed through Conda. It is only required for training and
+running the published predictor containers. If you only want to build the
+pre-miRBench dataset, Docker is not required.
+
+To prepare the predictor containers for training/evaluation:
 
 ```bash
 bash tools/setup_images.sh
 ```
 
-The pipeline also needs Docker, `bedtools`, `RNAfold`, and enough disk space for
-the combined genomes. Use scratch storage for full builds.
+## Build the dataset
 
-## Current Dataset Snapshot
+### 1. Download the raw data
+
+From the repository root:
+
+```bash
+bash pipeline/download_data.sh
+```
+
+The repository already contains the 71-species panel, source URLs, provenance,
+and any small supplementary FASTA/BED files required by the panel. The large
+genome FASTA files themselves are downloaded locally and are not stored in git.
+
+By default the raw files are written to:
+
+```text
+data/raw/mirgenedb_71/
+```
+
+### 2. Build the canonical dataset
+
+```bash
+python pipeline/build.py
+```
+
+That is the normal build command. It automatically uses:
+
+```text
+data/raw/mirgenedb_71/panel.tsv
+data/work/build_mirgenedb_71/
+data/datasets/mirgenedb_71/
+```
+
+The default build is the canonical 1:10 benchmark and automatically chooses a
+parallelism layout from the machine's available CPUs.
+
+Useful options:
+
+```bash
+python pipeline/build.py --jobs 12
+python pipeline/build.py --resume
+python pipeline/build.py --species hsa,mmu,gga
+python pipeline/build.py --data-dir /path/to/large/disk/premirbench-data
+```
+
+`--jobs` is the approximate total CPU budget. `--resume` reuses completed
+per-species intermediate files from an interrupted build.
+
+If `--data-dir` is used, keep the download and build locations consistent. For
+example:
+
+```bash
+bash pipeline/download_data.sh /path/to/large/disk/premirbench-data/raw/mirgenedb_71
+python pipeline/build.py --data-dir /path/to/large/disk/premirbench-data
+```
+
+The lower-level `pipeline/build_dataset.py` command still exists for advanced
+experiments, but normal users should use `pipeline/build.py`.
+
+## Dataset output
+
+A completed canonical dataset directory contains:
+
+```text
+data/datasets/mirgenedb_71/
+  dataset.csv
+  genome.fa
+  split_summary.csv
+  family_split_summary.csv
+  leakage_report.csv
+  tool_inputs/
+```
+
+The combined genome is large; the reference build is approximately 92 GB.
+
+## Current dataset snapshot
 
 The 2026-07-04 `mirgenedb_71` build has:
 
@@ -90,96 +172,27 @@ Split counts:
 | `test_heldout_species_known_family` | 207 | 2,070 |
 | `test_heldout_species_heldout_family` | 69 | 690 |
 
-The prepared dataset is too large for git. A complete dataset directory should
-look like this:
-
-```text
-mirgenedb_71/
-  dataset.csv
-  genome.fa
-  split_summary.csv
-  family_split_summary.csv
-  leakage_report.csv
-  run_metadata.json
-  repo_diff.patch
-  tool_inputs/
-```
-
-Useful environment variables:
-
-```bash
-export SCR=/SCRATCH/$USER/premirbench
-export DATASET=$SCR/datasets/mirgenedb_71
-export TRAIN_OUT=$SCR/models/new/training
-export EVAL_OUT=$SCR/comparisons/new/mirgenedb71_1to10
-```
-
-## Build The Dataset
-
-Download the 71-species panel:
-
-```bash
-bash pipeline/download_data.sh "$SCR/datasets/raw/mirgenedb_71"
-```
-
-Build the canonical 1:10 dataset:
-
-```bash
-python pipeline/build_dataset.py \
-  --panel "$SCR/datasets/raw/mirgenedb_71/panel.tsv" \
-  --output-dir "$SCR/datasets/mirgenedb_71" \
-  --work-dir "$SCR/datasets/work/build_mirgenedb_71" \
-  --ratio 10 \
-  --cpus 8 \
-  --species-jobs 12
-```
-
-Resume a partially completed build:
-
-```bash
-python pipeline/build_dataset.py \
-  --panel "$SCR/datasets/raw/mirgenedb_71/panel.tsv" \
-  --output-dir "$SCR/datasets/mirgenedb_71" \
-  --work-dir "$SCR/datasets/work/build_mirgenedb_71" \
-  --ratio 10 \
-  --cpus 8 \
-  --species-jobs 12 \
-  --reuse-existing
-```
-
-Important build flags:
-
-| flag | meaning |
-| --- | --- |
-| `--ratio 10` | target 10 negatives per positive in every final split |
-| `--window 200` | length of positive and negative windows |
-| `--cpus` | RNAfold workers used inside each species job |
-| `--species-jobs` | number of species processed in parallel |
-| `--heldout-species` | species excluded from training for held-out-species tests |
-| `--reuse-existing` | reuse completed per-species intermediate files |
-
-With 96 CPUs, a reasonable starting point is `--species-jobs 12 --cpus 8`.
-
 ## Splits
 
 There is one validation split and four test splits:
 
 | split | species relation to train | family relation to train | purpose |
 | --- | --- | --- | --- |
-| `valid` | known species | known families | model selection only |
-| `test_known_species_known_family` | known species | known families | easiest in-distribution test |
+| `valid` | known species | known families | model selection |
+| `test_known_species_known_family` | known species | known families | in-distribution test |
 | `test_known_species_heldout_family` | known species | held-out families | family generalization |
 | `test_heldout_species_known_family` | held-out species | known families | species generalization |
 | `test_heldout_species_heldout_family` | held-out species | held-out families | strictest generalization test |
 
-Final rows are globally de-duplicated by exact prepared 100 nt sequence. That
-means the same leakage-control sequence cannot appear twice within a split,
-between train and validation, between train and tests, between tests, or on both
-sides of the positive/negative label.
+Final rows are globally de-duplicated by exact prepared 100 nt sequence. The same
+leakage-control sequence cannot appear twice within a split, between train and
+validation, between train and tests, between tests, or on both sides of the
+positive/negative label. `leakage_report.csv` records the final checks.
 
-`leakage_report.csv` records the final checks.
+## Train published tools
 
-## Train Tools
+The training wrappers use Dockerized environments for the six published
+predictors.
 
 Train one tool:
 
@@ -187,38 +200,34 @@ Train one tool:
 python pipeline/train.py \
   --tool mirdnn \
   --run-name mirgenedb71_1to10 \
-  --dataset-dir "$DATASET" \
-  --output-root "$TRAIN_OUT"
+  --dataset-dir data/datasets/mirgenedb_71 \
+  --output-root results/training
 ```
 
 Train all tools:
 
 ```bash
 for tool in deepmir deepmirgene dnnpremir mirdnn mire2e mustard; do
-  PYTHONUNBUFFERED=1 python -u pipeline/train.py \
+  python -u pipeline/train.py \
     --tool "$tool" \
     --run-name mirgenedb71_1to10 \
-    --dataset-dir "$DATASET" \
-    --output-root "$TRAIN_OUT"
+    --dataset-dir data/datasets/mirgenedb_71 \
+    --output-root results/training
 done
 ```
 
-Each trained tool writes an `inference_config.yaml` next to its model artifact:
+Each trained tool writes an `inference_config.yaml` next to its model artifact.
 
-```text
-$TRAIN_OUT/<tool>/mirgenedb71_1to10/
-```
-
-## Evaluate Tools
+## Evaluate published tools
 
 Evaluate all trained tools:
 
 ```bash
 python pipeline/evaluate.py \
-  --dataset-dir "$DATASET" \
-  --training-root "$TRAIN_OUT" \
+  --dataset-dir data/datasets/mirgenedb_71 \
+  --training-root results/training \
   --run-name mirgenedb71_1to10 \
-  --output-dir "$EVAL_OUT" \
+  --output-dir results/evaluation/mirgenedb71_1to10 \
   --resume
 ```
 
@@ -227,14 +236,14 @@ Evaluate a subset:
 ```bash
 python pipeline/evaluate.py \
   --tools mirdnn,deepmirgene,dnnpremir \
-  --dataset-dir "$DATASET" \
-  --training-root "$TRAIN_OUT" \
+  --dataset-dir data/datasets/mirgenedb_71 \
+  --training-root results/training \
   --run-name mirgenedb71_1to10 \
-  --output-dir "$EVAL_OUT" \
+  --output-dir results/evaluation/mirgenedb71_1to10 \
   --resume
 ```
 
-Evaluation writes:
+Evaluation writes outputs such as:
 
 ```text
 predictions.csv
@@ -247,35 +256,10 @@ raw/
 inputs/
 ```
 
-Regenerate only the plots from an existing `metrics.csv`:
+Regenerate plots from an existing `metrics.csv` with:
 
 ```bash
 python pipeline/evaluate.py \
-  --output-dir "$EVAL_OUT" \
+  --output-dir results/evaluation/mirgenedb71_1to10 \
   --plot-only
 ```
-
-## Useful Checks
-
-Check a copied dataset:
-
-```bash
-ls -lh "$DATASET"/dataset.csv "$DATASET"/genome.fa "$DATASET"/leakage_report.csv
-ls -lh "$DATASET"/tool_inputs
-```
-
-Check trained model artifacts:
-
-```bash
-find "$TRAIN_OUT" -name inference_config.yaml | sort
-find "$TRAIN_OUT" -type f | grep -E '/(model\.h5|new_test\.hdf5|CNN_model\.h5|model\.pmt|predictor\.pkl|CNNonRaw\.hdf5)$' | sort
-```
-
-## Retained workspace
-
-The node 4 workspace is `/SCRATCH/dtzim01/premirbench/`. Its root README maps
-the retained dataset, Agentomics run, verification results and archived figures.
-The maintained node 4 checkout is `/home/dtzim01/pre-miRBench`; the Mac checkout
-is `/Users/nucleotaid/Projects/pre-miRBench`. Published weights and predictions
-remain versioned under `model/` and `benchmarking_results/`. Use new output
-directories for new runs; historical snapshots retain their original paths.
