@@ -4,6 +4,10 @@ pre-miRBench is a multispecies benchmark for precursor-miRNA prediction built fr
 
 The canonical benchmark currently uses 71 species, 200 nt sequence windows, and a 1:10 positive:negative ratio, with separate tests for species and miRNA-family generalization.
 
+## Data and benchmarking results
+
+The released pre-miRBench datasets, benchmarking results, and associated large artifacts are archived on [Zenodo](https://zenodo.org/records/22813044).
+
 ## Released pre-miRBench model
 
 The released model is in [`pre-miRBench_model/`](pre-miRBench_model/).
