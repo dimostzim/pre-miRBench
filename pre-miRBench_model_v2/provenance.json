@@ -1,0 +1,219 @@
+{
+  "agentomics": {
+    "agent_id": "defenseless_chrysantemum_prevent",
+    "agentomics_commit": "501a27d80c0a640f7d56bb0eca57e2c13bd74614",
+    "agentomics_version": "1.1.0",
+    "container_image": "agentomics:501a27d-v4",
+    "container_image_id": "sha256:95e36bab7e9b7f419b218a20c0356b50dabed53172ff01bb02985abaa35ea1a2",
+    "development_iterations": 20,
+    "model": "gpt-6.1-sol",
+    "provider": "Codex",
+    "selected_iteration": 19,
+    "split": "locked (split_allowed_iterations 0); the supplied train and validation partitions were used unchanged",
+    "validation_ap": 0.9899626109000885,
+    "workspace": "premirbench_v2_run2"
+  },
+  "dataset": {
+    "name": "premirbench_v2",
+    "test_heldout_species_heldout_family": 1507,
+    "test_heldout_species_known_family": 2915,
+    "test_known_species_heldout_family": 7634,
+    "test_known_species_known_family": 7744,
+    "train": 48796,
+    "train_positives": 4436,
+    "validation": 7436,
+    "validation_positives": 676
+  },
+  "deployment": {
+    "agent_manifest_sha256": "f39afe55b9fc417d8964a4a0ceedc75aa38b0305079d6bb02cd41c65bc1abe61",
+    "aggregation": "float64 0.80 * final XGBoost + 0.10 * first neural network (frozen_neural.pt) + 0.10 * second neural network (new_neural.pt); prediction 1 iff probability >= 0.5",
+    "artifact_sha256": {
+      "augmented_tree_imputer.joblib": "75ba4a6b243d86047ab990015a94e10e1f685d1e4cadc3a6d95fcf5aac086389",
+      "frozen_neural.pt": "455d803320d632e88b6050b184cc57c1847544e8b5d093902e83bdd342640993",
+      "model.ubj": "6285c480e1e4d756a8d551fc7152aab2cc4d9575acc3861c3f4e94d8962e9a29",
+      "neural_bundle/global_preprocessor.joblib": "1a7e8dc2d36bff51cde17584c64209c6b9f3d54204d9d3d48628eae0575ab436",
+      "new_neural.pt": "04eb667dc695ef6f7ac6b599834daf956e9ef7c57ac7b95812816587d76f03c3",
+      "tree_bundle/imputer.joblib": "f5ada8b7b84144aa05c8a1ae9e42d2667c56543ed97ca5635b842a898259bc70"
+    },
+    "neural_network_trainable_parameters": 1249153,
+    "tree_features": 16354,
+    "tree_rounds": 16721
+  },
+  "source_files": {
+    "model_code/augmented_feature_config.json": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/augmented_feature_config.json",
+      "original_source": "run/iteration_17/data_representation/augmented_feature_config.json",
+      "sha256": "c5a27f0e40219fe08119d2c6fe92ebbc4b4afd54e4a1ca1fe96615426d364f5c"
+    },
+    "model_code/frozen_representation.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/frozen_representation.py",
+      "original_source": "run/iteration_17/data_representation/frozen_representation.py",
+      "sha256": "b897406987151ce857aeb91c1cb001fb4df3e0e07932c01d5699000cc760b392"
+    },
+    "model_code/loop_features.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/loop_features.py",
+      "original_source": "run/iteration_17/data_representation/loop_features.py",
+      "sha256": "4d9223607098efd8bdec9a3dc23e126e57397378dde3d9e3600c47eda0dd9c3d"
+    },
+    "model_code/neural_bundle/feature_config.json": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/neural_bundle/feature_config.json",
+      "original_source": "run/iteration_11/data_representation/feature_config.json",
+      "sha256": "c9ce00135adb0f0bb723d4c01c65b0887a266aed70b4cabcfc704b9add6df73c"
+    },
+    "model_code/neural_bundle/features.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/neural_bundle/features.py",
+      "original_source": "run/iteration_4/data_representation/features.py",
+      "sha256": "5960f5f1505c07c91673333238f8983e6f959780c2a916dfb4a45f3f5c3217cb"
+    },
+    "model_code/neural_bundle/iteration4_feature_config.json": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/neural_bundle/iteration4_feature_config.json",
+      "original_source": "run/iteration_11/data_representation/iteration4_feature_config.json",
+      "sha256": "4e0f23f1188f44c9f4d3f4836c3e71f73051ca72e0d3ccce54f0f393ea23adb6"
+    },
+    "model_code/neural_bundle/representation.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/neural_bundle/representation.py",
+      "original_source": "run/iteration_11/data_representation/representation.py",
+      "sha256": "e3e0bf017d5239676bd03f3bb2150ad5a13749613abdce3f44d08f8ebe946f41"
+    },
+    "model_code/neural_model.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/neural_model.py",
+      "original_source": "run/iteration_13/model_training/neural_model.py",
+      "sha256": "2ea46761c95db89736418c34855e6fedc2a4e7e2ac6160cb634d9bdaa6a2ee80"
+    },
+    "model_code/representation.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/representation.py",
+      "original_source": "run/iteration_17/data_representation/representation.py",
+      "sha256": "6a219da913bfe3a1355927ef1d6785b05240ea210f532fc2ce4e21c0c4f6ac4b"
+    },
+    "model_code/tree_bundle/feature_config.json": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/tree_bundle/feature_config.json",
+      "original_source": "run/iteration_10/data_representation/feature_config.json",
+      "sha256": "0abd64021ff9afd2d3016a123a8dc576e6ecb420665b316b13765c98d7ec3f8c"
+    },
+    "model_code/tree_bundle/features.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/tree_bundle/features.py",
+      "original_source": "run/iteration_10/data_representation/features.py",
+      "sha256": "be0495fa12308048ea5da14bc3ab1b2d11d42e68858e3aee6c6ab2e352650162"
+    }
+  },
+  "training_recipe": {
+    "archived_script_edits": "The archived train.py of iterations 13, 18, and 19 differ from the code of their production runs only in output paths and smoke-test guards, according to the Agentomics log.",
+    "augmented_tree_imputer": {
+      "fit": "median imputation of 16,354 features on the training split",
+      "lines": "48-51",
+      "source": "run/iteration_17/data_representation/prepare_representation.py"
+    },
+    "final_xgboost_continuation": {
+      "added_rounds": 806,
+      "eta": 0.01,
+      "executed_added_rounds": 1806,
+      "retained_rounds": 16721,
+      "seed": 42,
+      "selection": "total tree count with the best validation blend AP; stop after 1,000 added rounds without improvement (cap 16,000 added rounds)",
+      "source": "run/iteration_19/model_training/train.py",
+      "validation_blend_ap": 0.9899626109000885
+    },
+    "final_xgboost_stage_1": {
+      "candidates_max_depth_min_child_weight_lambda": [
+        [
+          2,
+          2,
+          10
+        ],
+        [
+          3,
+          2,
+          10
+        ],
+        [
+          3,
+          5,
+          20
+        ]
+      ],
+      "executed_rounds": 16000,
+      "rounds": 15915,
+      "seed": 42,
+      "selected_max_depth_min_child_weight_lambda": [
+        3,
+        2,
+        10
+      ],
+      "selection": "early stopping after 600 rounds without improvement of the validation blend AP (cap 16,000 rounds); candidate with the best blend AP",
+      "source": "run/iteration_18/model_training/train.py",
+      "validation_blend_ap": 0.9899565330002797
+    },
+    "first_neural_network": {
+      "best_epoch": 45,
+      "candidate_order": "0.02 trained first; all random number generators reseeded at the start of each candidate",
+      "epochs": 63,
+      "label_smoothing_candidates": [
+        0.02,
+        0.05
+      ],
+      "seed": 42,
+      "selected_label_smoothing": 0.02,
+      "selection": "epoch with the best validation AP of 0.8 * helper XGBoost + 0.2 * network; stop when epoch >= 25 and 18 epochs without improvement",
+      "source": "run/iteration_13/model_training/train.py",
+      "validation_blend_ap": 0.9884478118675263
+    },
+    "helper_xgboost": {
+      "candidates_max_depth_min_child_weight_lambda": [
+        [
+          3,
+          5,
+          20
+        ],
+        [
+          3,
+          2,
+          10
+        ],
+        [
+          4,
+          5,
+          20
+        ]
+      ],
+      "retained_rounds": 7966,
+      "seed": 42,
+      "selected_max_depth_min_child_weight_lambda": [
+        3,
+        2,
+        10
+      ],
+      "selection": "early stopping after 400 rounds without validation AUPRC improvement; candidate with the best validation AP",
+      "source": "run/iteration_10/model_training/train.py",
+      "validation_ap": 0.9856174730381103
+    },
+    "neural_global_preprocessor": {
+      "fit": "median imputation and standardization of 1,837 features on the training split; transform clips to [-8, 8]",
+      "lines": "52-53",
+      "source": "run/iteration_11/model_training/train.py"
+    },
+    "second_neural_network": {
+      "best_epoch": 34,
+      "epochs": 52,
+      "label_smoothing": 0.02,
+      "seed": 2025,
+      "selection": "epoch with the best validation AP of 0.8 * helper XGBoost + 0.1 * first network + 0.1 * network; same stopping rule",
+      "source": "run/iteration_14/model_training/train.py",
+      "validation_blend_ap": 0.9894106301815665
+    },
+    "source_script_sha256": {
+      "best_iteration_snapshot/model_inference/inference.py": "dcf4475c15b711789f3f9c157aa9a82500f8f3b779ba7f221a2ae79ecf5e842a",
+      "run/iteration_10/model_training/train.py": "5cca0585dd891f7a78e7ecf396d6f5f40d35202b1b92cb0734613a06b2a5bb98",
+      "run/iteration_11/model_training/train.py": "e21b1a8148254dde2f67b2715772e0675ccd6b4f026a9cd998af6acc7e80e714",
+      "run/iteration_13/model_training/train.py": "ad3e473ece5729ee84bec8ead5e94dea8a1ac45648adbb2c60774392cc010a84",
+      "run/iteration_14/model_training/train.py": "3c160dcfc6aaebcc82da819d84149cd1a348bc22e61b4c39a1078ac90f14cace",
+      "run/iteration_17/data_representation/prepare_representation.py": "9392f12274427d5c160d192281dda8fff7f352be546ac82818de448408718fb8",
+      "run/iteration_18/model_training/train.py": "e4bc4daa1313b5508579749226fc86dd1cead2c653f348a2c0de7f12fb9649b5",
+      "run/iteration_19/model_training/train.py": "78e2df8b7521901c86e4bd950b308445452e234d78f77550eaab52cad2e4c014"
+    },
+    "tree_imputer": {
+      "fit": "median imputation of 13,357 features on the training split",
+      "lines": "39, 64",
+      "source": "run/iteration_10/model_training/train.py"
+    }
+  }
+}

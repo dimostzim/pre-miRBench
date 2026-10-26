@@ -13,8 +13,10 @@ import math
 import os
 import random
 import re
+import statistics
 import subprocess
 import sys
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -64,7 +66,13 @@ FIELDNAMES = [
     "score",
     "consensus",
     "hard_round",
+    "hairpin_start",
+    "hairpin_end",
+    "hairpin_loop_start",
+    "hairpin_loop_end",
+    "hairpin_mfe",
 ]
+COMPLEMENT = str.maketrans("ACGU", "UGCA")
 
 
 def run(cmd, reuse_output=None):
@@ -238,6 +246,20 @@ def canonical_leakage_sequence(row):
     return sequence[left:right]
 
 
+def leakage_key(row):
+    """Strand-independent duplicate key: the smaller of the 100-nt sequence and its reverse complement."""
+    sequence = canonical_leakage_sequence(row)
+    return min(sequence, sequence.translate(COMPLEMENT)[::-1]) if sequence else ""
+
+
+def windows_overlap(first, second):
+    return (
+        first["chrom"] == second["chrom"]
+        and int(first["start"]) < int(second["end"])
+        and int(second["start"]) < int(first["end"])
+    )
+
+
 def annotate_positive(row, species):
     row = row.copy()
     row["species"] = species
@@ -344,7 +366,7 @@ def positive_priority_key(row):
 def deduplicate_positive_leakage_groups(rows):
     grouped = defaultdict(list)
     for row in rows:
-        grouped[canonical_leakage_sequence(row)].append(row)
+        grouped[leakage_key(row)].append(row)
 
     kept = []
     excluded = []
@@ -358,6 +380,26 @@ def deduplicate_positive_leakage_groups(rows):
             row = row.copy()
             row["split_reason"] = "duplicate_100nt_excluded"
             excluded.append(row)
+    return kept, excluded
+
+
+def remove_cross_split_positive_overlaps(rows):
+    """Keep the higher-priority row when positive windows in different partitions overlap on either strand."""
+    by_chrom = defaultdict(list)
+    for row in sorted(rows, key=positive_priority_key):
+        by_chrom[row["chrom"]].append(row)
+    kept = []
+    excluded = []
+    for chrom_rows in by_chrom.values():
+        chrom_kept = []
+        for row in chrom_rows:
+            if any(other["split"] != row["split"] and windows_overlap(row, other) for other in chrom_kept):
+                row = row.copy()
+                row["split_reason"] = "overlapping_window_excluded"
+                excluded.append(row)
+            else:
+                chrom_kept.append(row)
+        kept.extend(chrom_kept)
     return kept, excluded
 
 
@@ -403,6 +445,9 @@ def relabel_family_splits(rows, heldout_species):
 
 
 def assign_positive_splits(positives, args):
+    # Species are processed in parallel and finish in arbitrary order; sort so that the
+    # seeded family/group sampling below does not depend on completion order.
+    positives = sorted(positives, key=lambda row: (row["species"], row["chrom"], int(row["start"]), row["strand"], row["mirna_id"]))
     heldout_species = parse_csv_set(args.heldout_species)
     known_species_rows = [row for row in positives if row["species"] not in heldout_species]
     heldout_species_families = {row["family_id"] for row in positives if row["species"] in heldout_species}
@@ -495,8 +540,14 @@ def assign_positive_splits(positives, args):
             row["split_reason"] = "heldout_species_heldout_family"
 
     kept, excluded = deduplicate_positive_leakage_groups(assigned)
-    kept = relabel_family_splits(kept, heldout_species)
-    return kept, excluded
+    # Removing overlapping rows can remove a family's last training member, which changes
+    # family status, so relabel and re-check until no further rows are removed.
+    while True:
+        kept = relabel_family_splits(kept, heldout_species)
+        kept, overlapping = remove_cross_split_positive_overlaps(kept)
+        excluded.extend(overlapping)
+        if not overlapping:
+            return kept, excluded
 
 
 def negative_candidate_order(species_result):
@@ -539,90 +590,70 @@ def split_species_quotas(positive_rows, ratio):
     return quotas, target
 
 
-def take_negative_rows(species, candidates_by_species, needed, used_windows, used_sequences):
-    chosen = []
-    for row in candidates_by_species.get(species, []):
-        if len(chosen) >= needed:
-            break
-        sequence_key = canonical_leakage_sequence(row)
-        if not sequence_key or sequence_key in used_sequences or row["window_id"] in used_windows:
-            continue
-        used_sequences.add(sequence_key)
-        used_windows.add(row["window_id"])
-        chosen.append(row)
-    return chosen
+def stratified_split_labels(quotas, seed):
+    """Partition labels for a rank-ordered candidate list, so every partition gets the same difficulty mix.
+
+    Each rank position goes to the partition furthest below its target share of the positions
+    assigned so far. Labels are then shuffled within consecutive blocks, so allocation does not
+    depend on exact rank.
+    """
+    total = sum(quotas.values())
+    assigned = Counter()
+    labels = []
+    for position in range(1, total + 1):
+        split = max(quotas, key=lambda name: (quotas[name] * position / total - assigned[name], -FINAL_SPLITS.index(name)))
+        assigned[split] += 1
+        labels.append(split)
+    if assigned != Counter(quotas):
+        raise AssertionError(f"stratified allocation produced {dict(assigned)} instead of {quotas}")
+    rng = random.Random(seed)
+    block = 10 * len(quotas)
+    for block_start in range(0, total, block):
+        chunk = labels[block_start:block_start + block]
+        rng.shuffle(chunk)
+        labels[block_start:block_start + block] = chunk
+    return labels
 
 
 def select_all_negatives(results, positives_by_split, args):
+    """Take each species' highest-ranked candidates and allocate them to partitions by stratified rank."""
     result_by_species = {result["species"]: result for result in results}
-    candidates_by_species = {
-        species: negative_candidate_order(result)
-        for species, result in result_by_species.items()
-    }
-    used_windows = set()
-    used_sequences = {
-        canonical_leakage_sequence(row)
-        for split_rows in positives_by_split.values()
-        for row in split_rows
-        if canonical_leakage_sequence(row)
-    }
-    selected = []
-    issues_by_species = defaultdict(list)
-
-    for split_index, split in enumerate(FINAL_SPLITS):
+    quotas_by_species = defaultdict(dict)
+    for split in FINAL_SPLITS:
         positive_rows = positives_by_split.get(split, [])
         if not positive_rows:
             continue
+        quotas, _target = split_species_quotas(positive_rows, args.ratio)
+        for species, quota in quotas.items():
+            if quota:
+                quotas_by_species[species][split] = quota
 
-        quotas, target = split_species_quotas(positive_rows, args.ratio)
-        split_selected = []
-        for species, quota in sorted(quotas.items(), key=lambda item: result_by_species[item[0]]["species_index"]):
-            split_selected.extend(
-                take_negative_rows(
-                    species,
-                    candidates_by_species,
-                    quota,
-                    used_windows,
-                    used_sequences,
-                )
+    used_keys = {leakage_key(row) for rows in positives_by_split.values() for row in rows}
+    selected = []
+    for species in sorted(quotas_by_species, key=lambda name: result_by_species[name]["species_index"]):
+        quotas = quotas_by_species[species]
+        needed = sum(quotas.values())
+        chosen = []
+        for row in negative_candidate_order(result_by_species[species]):
+            if len(chosen) == needed:
+                break
+            key = leakage_key(row)
+            if not key or key in used_keys:
+                continue
+            used_keys.add(key)
+            chosen.append(row)
+        if len(chosen) < needed:
+            raise ValueError(
+                f"{species}: {needed} negatives required but only {len(chosen)} candidates available; "
+                "increase --negative-sample-bases"
             )
-
-        if len(split_selected) < target:
-            rng = random.Random(args.seed + split_index)
-            fill_species = list(quotas)
-            rng.shuffle(fill_species)
-            while len(split_selected) < target:
-                before = len(split_selected)
-                for species in fill_species:
-                    if len(split_selected) >= target:
-                        break
-                    split_selected.extend(
-                        take_negative_rows(
-                            species,
-                            candidates_by_species,
-                            1,
-                            used_windows,
-                            used_sequences,
-                        )
-                    )
-                if len(split_selected) == before:
-                    break
-
-        for row in split_selected:
+        labels = stratified_split_labels(quotas, args.seed + result_by_species[species]["species_index"])
+        for row, split in zip(chosen, labels):
             row = row.copy()
             row["split"] = split
             row["split_reason"] = "negative"
             selected.append(row)
-
-        if len(split_selected) < target:
-            message = (
-                f"{split}: requested {target} negatives for "
-                f"{len(positive_rows)} positives but selected {len(split_selected)}"
-            )
-            for species in quotas:
-                issues_by_species[species].append(message)
-
-    return selected, issues_by_species
+    return selected
 
 
 def write_split_summary(path, rows):
@@ -636,12 +667,19 @@ def write_split_summary(path, rows):
         "positives_after_filters",
         "positives_written",
         "positive_chr_missing",
+        "positive_no_hairpin",
         "positive_boundary_filtered",
         "positive_repeat_filtered",
+        "negative_bases_folded",
+        "negative_hairpins",
+        "negative_hairpins_after_loop_collapse",
+        "negative_windows_selected",
         "negative_windows_folded",
-        "negative_hairpin_like_kept",
-        "negative_overlap_skipped",
-        "negative_repeat_or_n_skipped",
+        "negative_skipped_excluded_interval",
+        "negative_skipped_overlap",
+        "negative_skipped_masked_or_n",
+        "negative_precursor_similar_removed",
+        "negative_near_duplicate_removed",
         "input_positives",
         "input_negative_windows",
         "excluded_pos",
@@ -674,11 +712,7 @@ def finalize_records(rows):
 
 def write_family_split_summary(path, rows, heldout_species):
     train_families = {row["family_id"] for row in rows if row["split"] == "train" and row["label"] == "1"}
-    train_sequences = {
-        canonical_leakage_sequence(row)
-        for row in rows
-        if row["split"] == "train" and row["label"] == "1" and canonical_leakage_sequence(row)
-    }
+    train_sequences = {leakage_key(row) for row in rows if row["split"] == "train" and row["label"] == "1" and leakage_key(row)}
 
     summary_rows = []
     for split in FINAL_SPLITS:
@@ -699,7 +733,7 @@ def write_family_split_summary(path, rows, heldout_species):
                 "exact_100nt_overlap_with_train": (
                     0
                     if split == "train"
-                    else sum(1 for row in positive_rows if canonical_leakage_sequence(row) in train_sequences)
+                    else sum(1 for row in positive_rows if leakage_key(row) in train_sequences)
                 ),
             }
         )
@@ -726,7 +760,7 @@ def validate_split_guarantees(rows, heldout_species):
     issues = []
 
     for row in rows:
-        sequence_key = canonical_leakage_sequence(row)
+        sequence_key = leakage_key(row)
         if not sequence_key:
             issues.append(f"{row.get('record_id')}: missing canonical 100nt sequence")
         elif sequence_key in seen_sequences:
@@ -756,6 +790,34 @@ def validate_split_guarantees(rows, heldout_species):
         raise ValueError(f"Split guarantee validation failed:\n{examples}{suffix}")
 
 
+def window_overlap_counts(rows):
+    """Pairs of records whose windows overlap on either strand, by type."""
+    counts = Counter()
+    by_chrom = defaultdict(list)
+    for row in rows:
+        by_chrom[row["chrom"]].append(row)
+    for chrom_rows in by_chrom.values():
+        chrom_rows.sort(key=lambda row: int(row["start"]))
+        for index, row in enumerate(chrom_rows):
+            for other in chrom_rows[index + 1:]:
+                if int(other["start"]) >= int(row["end"]):
+                    break
+                if row["split"] != other["split"]:
+                    counts["cross_split"] += 1
+                if row["label"] != other["label"]:
+                    counts["negative_positive"] += 1
+                if row["label"] == "0" and other["label"] == "0":
+                    counts["negative_negative"] += 1
+    return counts
+
+
+def validate_window_overlaps(rows):
+    counts = window_overlap_counts(rows)
+    problems = {name: counts[name] for name in ("cross_split", "negative_positive", "negative_negative") if counts[name]}
+    if problems:
+        raise ValueError(f"Window overlap validation failed: {problems}")
+
+
 def validate_ratio_guarantees(rows, ratio):
     issues = []
     counts = Counter((row["split"], row["label"]) for row in rows)
@@ -774,8 +836,13 @@ def write_leakage_report(path, rows, excluded_positive_rows, ratio):
     report_rows = []
     report_rows.append({"metric": "canonical_leakage_length", "value": CANONICAL_LEAKAGE_LENGTH})
     report_rows.append({"metric": "records", "value": len(rows)})
-    report_rows.append({"metric": "unique_100nt_sequences", "value": len({canonical_leakage_sequence(row) for row in rows})})
-    report_rows.append({"metric": "excluded_positive_100nt_duplicates", "value": len(excluded_positive_rows)})
+    report_rows.append({"metric": "unique_100nt_keys_either_strand", "value": len({leakage_key(row) for row in rows})})
+    reasons = Counter(row["split_reason"] for row in excluded_positive_rows)
+    report_rows.append({"metric": "excluded_positive_100nt_duplicates", "value": reasons["duplicate_100nt_excluded"]})
+    report_rows.append({"metric": "excluded_positive_overlapping_windows", "value": reasons["overlapping_window_excluded"]})
+    overlaps = window_overlap_counts(rows)
+    for name in ("cross_split", "negative_positive", "negative_negative"):
+        report_rows.append({"metric": f"window_overlap_pairs_{name}", "value": overlaps[name]})
     for split in FINAL_SPLITS:
         positives = counts[(split, "1")]
         negatives = counts[(split, "0")]
@@ -783,6 +850,34 @@ def write_leakage_report(path, rows, excluded_positive_rows, ratio):
         report_rows.append({"metric": f"{split}_negatives", "value": negatives})
         report_rows.append({"metric": f"{split}_expected_negatives", "value": math.ceil(positives * ratio)})
     write_csv(path, report_rows, fieldnames=["metric", "value"])
+
+
+def write_negative_difficulty(path, rows):
+    """Mined-hard fraction and within-species mining-score percentile of negatives, by partition."""
+    negatives = [row for row in rows if row["label"] == "0"]
+    by_species = defaultdict(list)
+    for row in negatives:
+        by_species[row["species"]].append(float(row["score"] or 0.0))
+    percentile = {}
+    for row in negatives:
+        scores = sorted(by_species[row["species"]])
+        value = float(row["score"] or 0.0)
+        percentile[row["record_id"]] = (bisect_left(scores, value) + bisect_right(scores, value)) / (2 * len(scores))
+    report_rows = []
+    for split in FINAL_SPLITS:
+        split_rows = [row for row in negatives if row["split"] == split]
+        if not split_rows:
+            continue
+        values = sorted(percentile[row["record_id"]] for row in split_rows)
+        report_rows.append(
+            {
+                "split": split,
+                "negatives": len(split_rows),
+                "mined_hard_fraction": f"{sum(1 for row in split_rows if row.get('hard_round')) / len(split_rows):.4f}",
+                "median_within_species_score_percentile": f"{values[len(values) // 2]:.4f}",
+            }
+        )
+    write_csv(path, report_rows, fieldnames=["split", "negatives", "mined_hard_fraction", "median_within_species_score_percentile"])
 
 
 def split_positive_rows(results, args):
@@ -797,7 +892,7 @@ def assemble_dataset_rows(results, args, positive_rows, excluded_positive_rows):
     for row in positive_rows:
         positives_by_split[row["split"]].append(row)
 
-    negatives, issues_by_species = select_all_negatives(results, positives_by_split, args)
+    negatives = select_all_negatives(results, positives_by_split, args)
 
     rows = []
     result_by_species = {result["species"]: result for result in results}
@@ -822,6 +917,7 @@ def assemble_dataset_rows(results, args, positive_rows, excluded_positive_rows):
 
     final_rows = finalize_records(rows)
     validate_split_guarantees(final_rows, parse_csv_set(args.heldout_species))
+    validate_window_overlaps(final_rows)
     validate_ratio_guarantees(final_rows, args.ratio)
     counts = Counter((row["species"], row["split"], row["label"]) for row in final_rows)
     excluded_counts = Counter(row["species"] for row in excluded_positive_rows)
@@ -836,8 +932,7 @@ def assemble_dataset_rows(results, args, positive_rows, excluded_positive_rows):
             summary[f"{split}_neg"] = counts[(species, split, "0")]
         issue_parts = []
         if excluded_counts[species]:
-            issue_parts.append(f"excluded {excluded_counts[species]} duplicate 100nt positives")
-        issue_parts.extend(issues_by_species[species])
+            issue_parts.append(f"excluded {excluded_counts[species]} duplicate or overlapping positives")
         summary["issues"] = "; ".join(issue_parts)
 
     return final_rows, excluded_positive_rows
@@ -853,8 +948,10 @@ def process_species(species_index, species_count, species_row, args, script_dir,
     prefixed_bed = species_work / "precursors.prefixed.bed"
     positives_csv = species_work / "positives.csv"
     positives_stats_csv = species_work / "positives.stats.csv"
+    precursor_fasta = species_work / "precursors_all.fa"
     pool_csv = species_work / "hairpin_pool.csv"
     pool_stats_csv = species_work / "hairpin_pool.stats.csv"
+    filtered_pool_csv = species_work / "hairpin_pool.similarity_filtered.csv"
     hard_csv = species_work / "hard_negatives.train_mined.csv"
     scores_csv = species_work / "hard_negative_scores.train_mined.csv"
 
@@ -886,49 +983,71 @@ def process_species(species_index, species_count, species_row, args, script_dir,
             args.window,
             "--max-repeat-frac",
             args.max_repeat_frac,
+            "--span",
+            args.hairpin_span,
+            "--min-hairpin-length",
+            args.min_hairpin_length,
+            "--max-hairpin-length",
+            args.max_hairpin_length,
+            "--max-hairpin-mfe",
+            args.max_hairpin_mfe,
+            "--max-shift",
+            args.max_shift,
+            "--seed",
+            args.seed + species_index,
             "--output",
             positives_csv,
             "--stats-output",
             positives_stats_csv,
+            "--precursor-fasta",
+            precursor_fasta,
             "--cpus",
             args.cpus,
         ],
         positives_csv if args.reuse_existing else None,
     )
 
-    hairpin_cmd = [
-        python_exe,
-        script_dir / "extract_hairpins.py",
-        "--bed",
-        prefixed_bed,
-        "--genome",
-        prefixed_genome,
-        "--window",
-        args.window,
-        "--step",
-        args.step,
-        "--max-repeat-frac",
-        args.max_repeat_frac,
-        "--min-mfe",
-        args.min_mfe,
-        "--min-paired-frac",
-        args.min_paired_frac,
-        "--min-stem",
-        args.min_stem,
-        "--max-loop",
-        args.max_loop,
-        "--output",
-        pool_csv,
-        "--stats-output",
-        pool_stats_csv,
-        "--cpus",
-        args.cpus,
-    ]
-    if args.max_negative_windows_per_species:
-        hairpin_cmd.extend(["--max-windows", args.max_negative_windows_per_species])
-    if not args.sequential_negative_scan:
-        hairpin_cmd.append("--balance-bed-chroms")
-    run(hairpin_cmd, pool_csv if args.reuse_existing else None)
+    run(
+        [
+            python_exe,
+            script_dir / "extract_hairpin_candidates.py",
+            "--genome",
+            prefixed_genome,
+            "--exclude-bed",
+            prefixed_bed,
+            "--exclude-buffer",
+            args.exclude_buffer,
+            "--mode",
+            "sample",
+            "--sample-bases",
+            args.negative_sample_bases,
+            "--chunk-size",
+            args.chunk_size,
+            "--span",
+            args.hairpin_span,
+            "--min-hairpin-length",
+            args.min_hairpin_length,
+            "--max-hairpin-length",
+            args.max_hairpin_length,
+            "--max-hairpin-mfe",
+            args.max_hairpin_mfe,
+            "--window",
+            args.window,
+            "--max-repeat-frac",
+            args.max_repeat_frac,
+            "--max-shift",
+            args.max_shift,
+            "--cpus",
+            args.cpus,
+            "--seed",
+            args.seed + species_index,
+            "--output",
+            pool_csv,
+            "--stats-output",
+            pool_stats_csv,
+        ],
+        pool_csv if args.reuse_existing else None,
+    )
 
     heldout_species = {item.strip() for item in args.heldout_species.split(",") if item.strip()}
     positives_stats = read_stats(positives_stats_csv)
@@ -945,14 +1064,21 @@ def process_species(species_index, species_count, species_row, args, script_dir,
         "positives_after_filters": positives_stats.get("positives_after_filters", ""),
         "positives_written": positives_stats.get("positives_written", ""),
         "positive_chr_missing": positives_stats.get("skipped_chr_missing", ""),
+        "positive_no_hairpin": positives_stats.get("skipped_no_hairpin", ""),
         "positive_boundary_filtered": positives_stats.get("skipped_boundary", ""),
         "positive_repeat_filtered": positives_stats.get("skipped_repeat", ""),
-        "negative_windows_folded": pool_stats.get("folded_candidate_windows", ""),
-        "negative_hairpin_like_kept": pool_stats.get("hairpin_like_negatives_kept", ""),
-        "negative_overlap_skipped": pool_stats.get("skipped_overlap", ""),
-        "negative_repeat_or_n_skipped": pool_stats.get("skipped_repeat_or_n", ""),
+        "negative_bases_folded": pool_stats.get("folded_bases", ""),
+        "negative_hairpins": pool_stats.get("hairpins", ""),
+        "negative_hairpins_after_loop_collapse": pool_stats.get("hairpins_after_loop_collapse", ""),
+        "negative_windows_selected": pool_stats.get("windows_selected", ""),
+        "negative_windows_folded": pool_stats.get("windows_folded", ""),
+        "negative_skipped_excluded_interval": pool_stats.get("skipped_excluded_interval", ""),
+        "negative_skipped_overlap": pool_stats.get("skipped_overlap", ""),
+        "negative_skipped_masked_or_n": pool_stats.get("skipped_masked_or_n", ""),
+        "negative_precursor_similar_removed": "",
+        "negative_near_duplicate_removed": "",
         "input_positives": len(positives),
-        "input_negative_windows": pool_stats.get("hairpin_like_negatives_kept", ""),
+        "input_negative_windows": "",
         "excluded_pos": 0,
         "positives": 0,
         "negatives": 0,
@@ -963,6 +1089,8 @@ def process_species(species_index, species_count, species_row, args, script_dir,
         "species": species,
         "prefixed_genome": str(prefixed_genome),
         "pool_csv": str(pool_csv),
+        "filtered_pool_csv": str(filtered_pool_csv),
+        "precursor_fasta": str(precursor_fasta),
         "hard_csv": str(hard_csv),
         "scores_csv": str(scores_csv),
         "positives": positives,
@@ -970,6 +1098,43 @@ def process_species(species_index, species_count, species_row, args, script_dir,
         "scored_negatives": [],
         "summary": summary_row,
     }
+
+
+def filter_candidate_pools(results, args, script_dir, python_exe):
+    """Remove candidates resembling any annotated precursor or another candidate, across all species."""
+    work_dir = Path(args.work_dir) / "candidate_similarity"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    manifest = work_dir / "manifest.tsv"
+    report = work_dir / "similarity_report.csv"
+    ordered = sorted(results, key=lambda result: result["species_index"])
+    with open(manifest, "w", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(["species", "pool_csv", "filtered_csv"])
+        for result in ordered:
+            writer.writerow([result["species"], result["pool_csv"], result["filtered_pool_csv"]])
+    run(
+        [
+            python_exe,
+            script_dir / "filter_candidate_similarity.py",
+            "--manifest",
+            manifest,
+            "--precursor-fasta",
+            *[result["precursor_fasta"] for result in ordered],
+            "--work-dir",
+            work_dir,
+            "--report",
+            report,
+            "--threads",
+            args.cpus * max(1, args.species_jobs),
+        ],
+        report if args.reuse_existing else None,
+    )
+    counts = {row["species"]: row for row in read_csv(report)}
+    for result in results:
+        row = counts[result["species"]]
+        result["summary"]["negative_precursor_similar_removed"] = row["precursor_similar"]
+        result["summary"]["negative_near_duplicate_removed"] = row["near_duplicate"]
+        result["summary"]["input_negative_windows"] = row["kept"]
 
 
 def mine_species_negatives(species_result, mining_positives, args, script_dir, python_exe, mining_jobs):
@@ -987,7 +1152,7 @@ def mine_species_negatives(species_result, mining_positives, args, script_dir, p
             "--positives",
             mining_positives_csv,
             "--pool",
-            species_result["pool_csv"],
+            species_result["filtered_pool_csv"],
             "--hard-negatives",
             hard_csv,
             "--scores",
@@ -1007,7 +1172,7 @@ def mine_species_negatives(species_result, mining_positives, args, script_dir, p
             "--seed",
             args.seed + species_result["species_index"],
         ],
-        scores_csv if args.reuse_existing else None,
+        hard_csv if args.reuse_existing else None,  # written last by mine_negatives.py
     )
     return {
         "species": species,
@@ -1016,20 +1181,40 @@ def mine_species_negatives(species_result, mining_positives, args, script_dir, p
     }
 
 
+def mining_positive_sets(train_positives, species_codes, seed):
+    """Training positives used to mine each species' candidates.
+
+    A species represented in training uses its own training positives. A held-out species
+    uses a seeded random subsample of the pooled training positives, of the median
+    per-species size, so its mining forest sees the same number of positives and random
+    pool negatives as a typical training species and most of its pool is scored out of sample.
+    """
+    by_species = defaultdict(list)
+    for row in train_positives:
+        by_species[row["species"]].append(row)
+    sample_size = int(statistics.median(len(rows) for rows in by_species.values()))
+    pooled = sorted(train_positives, key=lambda row: row["window_id"])
+    sets = {}
+    for species in sorted(species_codes):
+        if by_species.get(species):
+            sets[species] = by_species[species]
+        else:
+            sets[species] = random.Random(f"{seed}-{species}").sample(pooled, min(sample_size, len(pooled)))
+    return sets
+
+
 def add_train_mined_negatives(results, positive_rows, args, script_dir, python_exe, mining_jobs):
     train_positives = [row for row in positive_rows if row["split"] == "train"]
     if not train_positives:
         raise ValueError("No train positives available for negative mining.")
 
-    train_by_species = defaultdict(list)
-    for row in train_positives:
-        train_by_species[row["species"]].append(row)
+    mining_sets = mining_positive_sets(train_positives, [result["species"] for result in results], args.seed)
 
     updates = []
     species_jobs = max(1, args.species_jobs)
     if species_jobs == 1:
         for result in sorted(results, key=lambda row: row["species_index"]):
-            mining_positives = train_by_species.get(result["species"]) or train_positives
+            mining_positives = mining_sets[result["species"]]
             updates.append(
                 mine_species_negatives(
                     result,
@@ -1044,7 +1229,7 @@ def add_train_mined_negatives(results, positive_rows, args, script_dir, python_e
         with ProcessPoolExecutor(max_workers=species_jobs) as executor:
             futures = {}
             for result in results:
-                mining_positives = train_by_species.get(result["species"]) or train_positives
+                mining_positives = mining_sets[result["species"]]
                 futures[
                     executor.submit(
                         mine_species_negatives,
@@ -1074,25 +1259,22 @@ def parse_args():
     parser.add_argument("--output-dir", default="data/datasets/mirgenedb_71")
     parser.add_argument("--work-dir", default="data/work/build_mirgenedb_71")
     parser.add_argument("--species", default=None, help="Comma-separated species codes to include. Default: all auto species in panel.")
-    parser.add_argument("--heldout-species", default="gga,dme")
+    parser.add_argument("--heldout-species", default="gga,dme,dan,dya")
     parser.add_argument("--valid-frac", type=float, default=0.10)
     parser.add_argument("--valid-heldout-family-frac", type=float, default=0.0)
     parser.add_argument("--test-known-species-known-family-frac", type=float, default=0.10)
     parser.add_argument("--test-known-species-heldout-family-frac", type=float, default=0.10)
     parser.add_argument("--ratio", type=float, default=5.0)
     parser.add_argument("--window", type=int, default=200)
-    parser.add_argument("--step", type=int, default=50)
-    parser.add_argument("--max-negative-windows-per-species", type=int, default=50000)
-    parser.add_argument(
-        "--sequential-negative-scan",
-        action="store_true",
-        help="Scan negative windows in FASTA order. Default balances capped scans across BED-positive chromosomes.",
-    )
+    parser.add_argument("--negative-sample-bases", type=int, default=10_000_000, help="Genome bases folded per species for negative candidates.")
+    parser.add_argument("--chunk-size", type=int, default=50_000, help="Length of each randomly placed genome chunk.")
+    parser.add_argument("--hairpin-span", type=int, default=100, help="RNALfold -L maximum base-pair span.")
+    parser.add_argument("--min-hairpin-length", type=int, default=50)
+    parser.add_argument("--max-hairpin-length", type=int, default=100)
+    parser.add_argument("--max-hairpin-mfe", type=float, default=-20.0)
+    parser.add_argument("--exclude-buffer", type=int, default=100, help="Bases added on each side of annotated precursors before excluding candidate windows.")
     parser.add_argument("--max-repeat-frac", type=float, default=0.1)
-    parser.add_argument("--min-mfe", type=float, default=-10.0)
-    parser.add_argument("--min-paired-frac", type=float, default=0.40)
-    parser.add_argument("--min-stem", type=int, default=8)
-    parser.add_argument("--max-loop", type=int, default=25)
+    parser.add_argument("--max-shift", type=int, default=0)
     parser.add_argument("--cpus", type=int, default=8)
     parser.add_argument("--species-jobs", type=int, default=1, help="Number of species to process in parallel.")
     parser.add_argument("--mining-rounds", type=int, default=4)
@@ -1181,11 +1363,13 @@ def main():
                 result = future.result()
                 print(f"### completed {species}")
                 results.append(result)
+    results.sort(key=lambda result: result["species_index"])
 
     for result in sorted(results, key=lambda row: row["species_index"]):
         append_file(result["prefixed_genome"], combined_genome)
         summary_rows.append(result["summary"])
 
+    filter_candidate_pools(results, args, script_dir, python_exe)
     positive_rows, excluded_positive_rows = split_positive_rows(results, args)
     add_train_mined_negatives(results, positive_rows, args, script_dir, python_exe, mining_jobs)
     all_rows, excluded_positive_rows = assemble_dataset_rows(results, args, positive_rows, excluded_positive_rows)
@@ -1198,6 +1382,7 @@ def main():
     write_split_summary(split_summary, summary_rows)
     write_family_split_summary(family_split_summary, all_rows, heldout_species)
     write_leakage_report(leakage_report, all_rows, excluded_positive_rows, args.ratio)
+    write_negative_difficulty(output_dir / "negative_difficulty.csv", all_rows)
     prepare_tool_inputs(all_rows, output_dir / "tool_inputs", target_lengths=DEFAULT_TARGET_LENGTHS)
 
     print("\nsummary")

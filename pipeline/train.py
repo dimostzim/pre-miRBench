@@ -89,7 +89,9 @@ def default_tool_config(tool, dataset_dir):
         return {
             **fasta_inputs,
             "device": "cuda",
-            "pretrained": "hsa",
+            # Structure, MFE and predictor are rebuilt before fitting (tools/mire2e/train.py; MiRe2e.fit), so
+            # training always starts from random weights; "no" only avoids downloading the authors' weights.
+            "pretrained": "no",
             "train_structure": True,
             "train_mfe": True,
             "structure_training_fasta": None,
@@ -295,6 +297,22 @@ def add_optional_arg(cmd, flag, value):
         cmd.extend([flag, str(value)])
 
 
+def pinned_image(repo_root, tool):
+    """Return "<tool>:latest" after checking that it is the image recorded in tools/image_ids.tsv."""
+    with open(os.path.join(repo_root, "tools", "image_ids.tsv")) as handle:
+        rows = [line.rstrip("\n").split("\t") for line in handle if line.strip() and not line.startswith("#")]
+    expected = {row[0]: row[1] for row in rows[1:]}[tool]
+    image = f"{tool}:latest"
+    result = subprocess.run(["docker", "image", "inspect", "--format", "{{.Id}}", image], capture_output=True, text=True)
+    actual = result.stdout.strip()
+    if actual != expected:
+        raise SystemExit(
+            f"{image} is {actual or 'not present'}, but tools/image_ids.tsv expects {expected}. "
+            f"Load that image and tag it: docker tag {expected} {image}"
+        )
+    return image
+
+
 def add_training_wrapper_mount(cmd, repo_root, tool):
     wrapper = os.path.join(repo_root, "tools", tool, "train.py")
     if os.path.isfile(wrapper):
@@ -438,6 +456,9 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
             ("pretrain_epochs", "--pretrain_epochs"),
         ):
             add_optional_arg(cmd, flag, config.get(key))
+        if config.get("image_cache_dir"):
+            # Hairpin images from an earlier replicate on the same records (read-write: missing images are added).
+            cmd.extend(["--image_cache_dir", container_path(repo_root, config["image_cache_dir"], mounts, read_only=False)])
         add_common_training_args(cmd, config)
         add_early_stopping_args(cmd, config)
 
@@ -473,6 +494,7 @@ def build_tool_args(tool, repo_root, config, output_dir, mounts):
             ("threads", "--threads"),
             ("excludedTestChroms", "--exclTest"),
             ("excludedValidChroms", "--exclValid"),
+            ("seed", "--seed"),
         ):
             add_optional_arg(cmd, flag, config.get(key))
 
@@ -586,7 +608,7 @@ def main():
     for mount in mounts.values():
         cmd.extend(["-v", mount])
     add_training_wrapper_mount(cmd, repo_root, args.tool)
-    cmd.extend(["--entrypoint", "python", f"{args.tool}:latest"])
+    cmd.extend(["--entrypoint", "python", pinned_image(repo_root, args.tool)])
     cmd.extend(tool_args)
 
     subprocess.check_call(cmd)

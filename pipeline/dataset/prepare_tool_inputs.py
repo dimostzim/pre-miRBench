@@ -72,8 +72,9 @@ def crop_bounds(row, sequence_length, target_length):
 
     max_left = sequence_length - target_length
     source_start = parse_int(row["start"])
-    target_start = parse_int(row.get("target_start"))
-    target_end = parse_int(row.get("target_end"))
+    # Centre on the RNALfold hairpin when the record has one, so both classes are cropped by the same rule.
+    target_start = parse_int(row.get("hairpin_start") or row.get("target_start"))
+    target_end = parse_int(row.get("hairpin_end") or row.get("target_end"))
 
     if target_start is None or target_end is None or source_start is None:
         left = max_left // 2

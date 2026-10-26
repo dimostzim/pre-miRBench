@@ -1,0 +1,10 @@
+# Docker images used for every benchmark run: built on biogemt-6 on 2026-07-04 from tools/<tool>/Dockerfile
+# (the v1 training images; the build source is archived in the Zenodo release). pipeline/train.py and
+# pipeline/evaluate.py refuse to run if <tool>:latest is not the image listed here.
+tool	image_id	built
+deepmir	sha256:4430c9e95e0bebdf134d163cf8e87f187ce596ff561081966432b8c3605a1226	2026-07-04
+deepmirgene	sha256:16fb7395a09af5f5bc2d4b51a675bfc579a545778b3216d4bb29a79f35f34033	2026-07-04
+dnnpremir	sha256:ba84beaf130f9b99af2f264ebddf670bcd5d6a16ea361c3eb766a60685a21a45	2026-07-04
+mirdnn	sha256:f1d4a952790f1473eb3944d7625a792a4e70c68ceb9e06e180625b828a3d651d	2026-07-04
+mire2e	sha256:8fe027b00eae4fd3266456b90588d06d15a233bd288fc9d64f7c78eb4bc1ae3e	2026-07-04
+mustard	sha256:5e85befd58a86fd92e8e5678fc60b4bd9efc4f291cd4f1a492db633dfa1495ce	2026-07-04

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "original_schema_version": 3,
+  "channels": [
+    "A",
+    "C",
+    "G",
+    "U",
+    "(",
+    ")",
+    ".",
+    "depth_after/100",
+    "partner_offset/199",
+    "partner_A",
+    "partner_C",
+    "partner_G",
+    "partner_U",
+    "valid_position"
+  ],
+  "shape": [
+    "B",
+    14,
+    240
+  ],
+  "dtype": "float32",
+  "original_length": 200,
+  "alignment": "Immediate-parent dot-bracket pair tree: terminal pairs have no child pair; eligible midpoint in inclusive [79.5,119.5]; choose nearest 99.5, ties smaller opening index. Zero-based positions.",
+  "offset": "floor(119.5-selected_midpoint+0.5); fallback 20 if no eligible terminal pair; range 0..40",
+  "copy": "Copy all original 13 channels into offset:offset+200 unchanged; channel 13 = 1 there; all other entries zero. Never crop or refold.",
+  "partners": "int64 [B,240]; initialize self indices; occupied indices = original partner indices + offset; symmetric, unpaired and padded are self.",
+  "paired_mask": "aligned_x[:,4]+aligned_x[:,5]; excludes all padding and unpaired bases",
+  "scales": "Retain depth_after/100 and signed partner_offset/199, not /239.",
+  "mfe": "Separate float32 [B,1]; training median imputation, training mean and population std after imputation, frozen schema-v3 statistics in preprocessing.json.",
+  "frozen_views": "Original 13x200 features and unchanged nine-channel 100x100 pair_grid.py view.",
+  "execution": "Per minibatch only; build_aligned_features accepts numpy or torch on original device. No persistent padded dataset/grid caches.",
+  "metadata": "ID joins only; neither ID, species nor label enters alignment or features. Labels are numeric_label; no target transformation beyond float32 binary labels."
+}

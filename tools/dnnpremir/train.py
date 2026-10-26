@@ -9,7 +9,15 @@ import sys
 os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
 
 import numpy as np
+import tensorflow as tf
 from keras.callbacks import Callback, EarlyStopping
+
+
+def set_seeds(seed):
+    """Seed Python, numpy and TensorFlow; Keras weight initialization, dropout and shuffling use TensorFlow's generator."""
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
 
 def require_tensorflow_gpu(device):
@@ -224,8 +232,7 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
     require_tensorflow_gpu(args.device)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    set_seeds(args.seed)
 
     if args.positive_csv and args.negative_csv:
         positive_csv = args.positive_csv

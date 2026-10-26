@@ -11,3 +11,6 @@ dependencies:
   - viennarna
   - bedtools
   - scikit-learn
+  - blast
+  - mmseqs2
+  - pytest

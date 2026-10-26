@@ -1,0 +1,122 @@
+{
+  "agentomics": {
+    "agent_id": "mythic_caught_occur",
+    "agentomics_commit": "501a27d80c0a640f7d56bb0eca57e2c13bd74614",
+    "agentomics_version": "1.1.0",
+    "container_image": "agentomics:501a27d-v4",
+    "container_image_id": "sha256:95e36bab7e9b7f419b218a20c0356b50dabed53172ff01bb02985abaa35ea1a2",
+    "development_iterations": 20,
+    "model": "gpt-6.1-sol",
+    "provider": "Codex",
+    "selected_iteration": 19,
+    "split": "locked (split_allowed_iterations 0); the supplied train and validation partitions were used unchanged",
+    "user_prompt": "Develop a machine learning model that generalizes well to new unseen data. Do not stack or ensemble more than three models.",
+    "validation_ap": 0.9740079848028063,
+    "workspace": "premirbench_v3_run1"
+  },
+  "dataset": {
+    "name": "premirbench_v3",
+    "test_heldout_species_heldout_family": 1837,
+    "test_heldout_species_known_family": 3795,
+    "test_known_species_heldout_family": 9790,
+    "test_known_species_known_family": 9603,
+    "train": 59719,
+    "train_positives": 5429,
+    "validation": 9108,
+    "validation_positives": 828
+  },
+  "deployment": {
+    "agent_model_config_sha256": "0e2c54c9c2c878a0f80e55c0578d13a2f209d6358be8c23bd107fcf1cf1a2c39",
+    "aggregation": "float32 mean of the sigmoid probabilities of the three networks, stored as float64; prediction 1 iff probability >= 0.5",
+    "networks": [
+      {
+        "agent_file": "component_seed_42.pt",
+        "agent_file_sha256": "596126733f210b0845ee01d5fe6178e63fb9a83eff49958d633732932ced22ef",
+        "class": "AlignedPairCNN",
+        "epochs_run": 41,
+        "file": "aligned_network_1.pt",
+        "seed": 42,
+        "selected_epoch": 26,
+        "trainable_parameters": 518721,
+        "trained_in": "run/iteration_19/model_training/train.py",
+        "training_device": "cuda",
+        "training_script_sha256": "f7ad86d88d67e053b7a0700f0d6d08da38da59ff2ebe9cc44a33efc86a30c241",
+        "validation_ap": 0.9672916838682482
+      },
+      {
+        "agent_file": "component_seed_73.pt",
+        "agent_file_sha256": "4333148d757916feefc4b6d1a665da6f1524d272ec5c9c0cf847f2c0ca8b5dd4",
+        "class": "AlignedPairCNN",
+        "epochs_run": 44,
+        "file": "aligned_network_2.pt",
+        "seed": 73,
+        "selected_epoch": 29,
+        "trainable_parameters": 518721,
+        "trained_in": "run/iteration_18/model_training/train.py",
+        "training_device": "cuda",
+        "training_script_sha256": "ad07840165716b6e3d90eb98816ad54fc896e3c51b06274d759b6159726c979a",
+        "validation_ap": 0.9684517181307057
+      },
+      {
+        "agent_file": "component_seed_17.pt",
+        "agent_file_sha256": "8d749dc07737687b70894445f9873f7671c48512f55e772e4f983d0199c855b1",
+        "class": "FoldedGridPreMiRNACNN",
+        "epochs_run": 39,
+        "file": "folded_grid_network.pt",
+        "seed": 17,
+        "selected_epoch": 24,
+        "trainable_parameters": 760649,
+        "trained_in": "run/iteration_11/model_training/train.py",
+        "training_device": "cuda",
+        "training_script_sha256": "6e00872d6c2b96e90579c96cb88bdc1997abd7e40d3ff1d176ecbf907cf34269",
+        "validation_ap": 0.9645735052189658
+      }
+    ],
+    "preprocessing_sha256": "f566aa55e82e21277c607d6c7a78461e1b5224217ad83447092c5b4c950e2155"
+  },
+  "source_files": {
+    "model_code/aligned_features.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/aligned_features.py",
+      "original_source": "run/iteration_18/data_representation/aligned_features.py",
+      "sha256": "83768de00c997009664b2a96b5388077b6e55ff8d26924fe49c7f8312758a894"
+    },
+    "model_code/aligned_model.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/aligned_model.py",
+      "original_source": "run/iteration_18/model_architecture/aligned_model.py",
+      "sha256": "b2f738767a2b2c469324c8e68a7fdf45bd66d33802f336340bf50092ea2ae499"
+    },
+    "model_code/alignment_schema.json": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/alignment_schema.json",
+      "original_source": "run/iteration_18/data_representation/alignment_schema.json",
+      "sha256": "20a363f4ad0cdb31b02e8db4ee2844dbacd0ff20f5df158cc762f9ebbca3b993"
+    },
+    "model_code/features.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/features.py",
+      "original_source": "run/iteration_4/data_representation/features.py",
+      "sha256": "f457c6f1ae4e1d389e6155665be5ef8f68812c958446ea88fea8cd742283be8c"
+    },
+    "model_code/model.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/model.py",
+      "original_source": "run/iteration_11/model_architecture/model.py",
+      "sha256": "8f9ae4043517221a948831ca05bd33d8a10027187770701426441d3d1c5fbfb1"
+    },
+    "model_code/pair_grid.py": {
+      "deployed_source": "best_iteration_snapshot/model_training/training_artifacts/pair_grid.py",
+      "original_source": "run/iteration_11/data_representation/pair_grid.py",
+      "sha256": "6c6daa66e2e2734f83e871fc90a4a6824d3a111cb4c494e5f8d8b0a50dc61862"
+    }
+  },
+  "training_recipe": {
+    "batch_size": 256,
+    "checkpoint_selection": "highest validation AP (strict improvement)",
+    "early_stopping": "15 epochs without validation AP gain >= 0.0001; at most 100 epochs",
+    "gradient_clip_norm": 5.0,
+    "loss": "BCEWithLogitsLoss",
+    "mixup": "per batch, lambda = max(l, 1 - l) with l ~ Beta(0.2, 0.2) from numpy default_rng(seed); applied to the hidden states after the pair message (and the grid embedding), MFE and targets",
+    "optimizer": "AdamW(lr=0.0005, weight_decay=0.001, betas=(0.9, 0.999), eps=1e-8)",
+    "preprocessing": "fitted on the training split: MFE median -60.3, mean -62.41969875583985, population standard deviation 13.627969655564241",
+    "scheduler": "ReduceLROnPlateau(mode=max, factor=0.5, patience=3, threshold=1e-4, threshold_mode=rel, min_lr=1e-5) on validation AP",
+    "seeding": "random, numpy, torch and torch.cuda seeded with the network seed at the start of each network",
+    "torch_settings": "4 threads, cudnn.deterministic=True, cudnn.benchmark=False, TF32 off"
+  }
+}

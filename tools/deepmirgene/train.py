@@ -23,6 +23,13 @@ def require_tensorflow_gpu(device):
             pass
 
 
+def set_seeds(seed):
+    """Seed Python, numpy and TensorFlow; Keras weight initialization, dropout and shuffling use TensorFlow's generator."""
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
+
 def load_upstream_namespace(source_dir):
     upstream = os.path.join(source_dir, "inference", "deepMiRGene.py")
     with open(upstream) as handle:
@@ -111,11 +118,10 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
     require_tensorflow_gpu(args.device)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
 
     source_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepmirgene_src")
     namespace = load_upstream_namespace(source_dir)
+    set_seeds(args.seed)  # after loading: the upstream file calls np.random.seed(1337)
 
     import_data = namespace["import_data"]
     one_hot_wrap = namespace["one_hot_wrap"]

@@ -177,9 +177,10 @@ def write_bed(path, records):
 def split_input_paths(dataset_dir, tool, split):
     tool_dir = dataset_dir / "tool_inputs" / tool
     suffix = "fa" if tool in FASTA_TOOLS else "bed"
+    prefix = "validation" if split == "valid" else split  # prepare_tool_inputs writes valid as validation_*
     return (
-        tool_dir / f"{split}_positive.{suffix}",
-        tool_dir / f"{split}_negative.{suffix}",
+        tool_dir / f"{prefix}_positive.{suffix}",
+        tool_dir / f"{prefix}_negative.{suffix}",
     )
 
 
@@ -527,8 +528,21 @@ def stream_command(cmd):
         raise subprocess.CalledProcessError(return_code, cmd)
 
 
-def run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=False):
+def cpu_thread_args(cpu_threads):
+    """Docker arguments capping a CPU-only container at cpu_threads cores: a CFS quota (--cpus) and thread-pool
+    sizes for OpenMP/BLAS, PyTorch and TensorFlow, which otherwise start one thread per host core in every container."""
+    if not cpu_threads:
+        return []
+    args = ["--cpus", str(cpu_threads)]
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "TF_NUM_INTRAOP_THREADS"):
+        args.extend(["-e", f"{name}={cpu_threads}"])
+    return args + ["-e", "TF_NUM_INTEROP_THREADS=1"]
+
+
+def run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=False, cpu_only=False, cpu_threads=None):
     mounts = {}
+    if cpu_only and config.get("device"):
+        config = {**config, "device": "cpu"}
     split = input_path.stem
     runtime_dir = eval_dir / "_runtime" / tool / split
     input_arg_override = None
@@ -552,12 +566,12 @@ def run_inference(tool, root, train_helpers, config, input_path, output_dir, eva
         input_arg_override=input_arg_override,
     )
 
+    gpu_args = ["-e", "CUDA_VISIBLE_DEVICES=", *cpu_thread_args(cpu_threads)] if cpu_only else ["--gpus", "all"]
     cmd = [
         "docker",
         "run",
         "--rm",
-        "--gpus",
-        "all",
+        *gpu_args,
         "--user",
         f"{os.getuid()}:{os.getgid()}",
         "-e",
@@ -572,7 +586,7 @@ def run_inference(tool, root, train_helpers, config, input_path, output_dir, eva
     for mount in mounts.values():
         cmd.extend(["-v", mount])
     add_runtime_mounts(tool, root, eval_dir, split, cmd, reset_runtime=reset_runtime)
-    cmd.extend(["--entrypoint", "python", f"{tool}:latest"])
+    cmd.extend(["--entrypoint", "python", train_helpers.pinned_image(str(root), tool)])
     cmd.extend(tool_args)
 
     if dry_run:
@@ -735,16 +749,21 @@ def prediction_rows(tool, split, labels, scores):
 
 
 def average_precision(labels, scores):
+    """Sum over distinct thresholds of recall gain x precision; tied scores form one threshold,
+    so the result does not depend on record order (same as sklearn average_precision_score)."""
     positives = sum(labels)
     if not labels or positives == 0:
         return None
     order = sorted(range(len(scores)), key=lambda idx: scores[idx], reverse=True)
-    hits = 0
+    hits = previous_hits = rank = 0
     total = 0.0
-    for rank, idx in enumerate(order, start=1):
-        if labels[idx]:
-            hits += 1
-            total += hits / rank
+    while rank < len(order):
+        threshold = scores[order[rank]]
+        while rank < len(order) and scores[order[rank]] == threshold:
+            hits += labels[order[rank]]
+            rank += 1
+        total += (hits - previous_hits) * hits / rank
+        previous_hits = hits
     return total / positives
 
 
@@ -799,10 +818,31 @@ def confusion_metrics(labels, scores, threshold=0.5):
 
 
 def best_f1(labels, scores):
+    """Highest F1 over all score thresholds (prediction = score >= threshold); ties keep the higher threshold.
+
+    One pass over the scores sorted in decreasing order with cumulative counts, equivalent to
+    evaluating confusion_metrics at every distinct threshold.
+    """
     best = {"best_f1": None, "best_threshold": None}
-    for threshold in sorted(set(scores), reverse=True):
-        f1 = confusion_metrics(labels, scores, threshold)["f1"]
-        if f1 is not None and (best["best_f1"] is None or f1 > best["best_f1"]):
+    positives = sum(labels)
+    order = sorted(range(len(scores)), key=lambda idx: scores[idx], reverse=True)
+    tp = fp = 0
+    index = 0
+    while index < len(order):
+        threshold = scores[order[index]]
+        while index < len(order) and scores[order[index]] == threshold:
+            if labels[order[index]]:
+                tp += 1
+            else:
+                fp += 1
+            index += 1
+        fn = positives - tp
+        precision = tp / (tp + fp) if tp + fp else None
+        recall = tp / (tp + fn) if tp + fn else None
+        if precision is None or recall is None or precision + recall == 0:
+            continue  # confusion_metrics reports F1 as None here
+        f1 = 2 * precision * recall / (precision + recall)
+        if best["best_f1"] is None or f1 > best["best_f1"]:
             best = {"best_f1": f1, "best_threshold": threshold}
     return best
 
@@ -848,6 +888,12 @@ def parse_args():
     parser.add_argument("--resume", action="store_true", help="Reuse non-empty raw output directories instead of rerunning them.")
     parser.add_argument("--allow-missing", action="store_true", help="Skip tools whose trained inference_config.yaml is missing.")
     parser.add_argument("--dry-run", action="store_true", help="Print Docker commands without running them.")
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        help="Run inference containers without a GPU (configured devices are overridden to cpu), e.g. while GPUs train models.",
+    )
+    parser.add_argument("--cpu-threads", type=int, default=None, help="With --cpu-only, cap each inference container at this many cores.")
     parser.add_argument("--plot-only", action="store_true", help="Read <output-dir>/metrics.csv and write AUPRC plots only.")
     parser.add_argument("--log-file", help="Optional log path. Defaults to <output-dir>/run.log.txt.")
     return parser.parse_args()
@@ -885,7 +931,8 @@ def run_evaluation(args):
     training_root = expand_path(args.training_root)
     eval_dir = evaluation_output_dir(args)
     tools = parse_csv_list(args.tools, TOOLS)
-    splits = parse_csv_list(args.splits, DEFAULT_SPLITS)
+    # Any split with tool input files can be scored, e.g. valid (for thresholds) or genome-scale candidate sets.
+    splits = parse_csv_list(args.splits)
     configs = load_requested_configs(train_helpers, training_root, args.run_name, tools, allow_missing=args.allow_missing)
     tools = [tool for tool in tools if tool in configs]
     if not tools:
@@ -912,7 +959,7 @@ def run_evaluation(args):
                         print(f"resume reason: {error}")
                         shutil.rmtree(output_dir)
                         output_dir.mkdir(parents=True, exist_ok=True)
-                        run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+                        run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run, cpu_only=args.cpu_only, cpu_threads=args.cpu_threads)
                 elif args.resume and has_raw_output(output_dir):
                     print(f"### {tool} {split} (resume: using existing raw output)")
                 else:
@@ -920,7 +967,7 @@ def run_evaluation(args):
                     if output_dir.exists():
                         shutil.rmtree(output_dir)
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run)
+                    run_inference(tool, root, train_helpers, config, input_path, output_dir, eval_dir, dry_run=args.dry_run, cpu_only=args.cpu_only, cpu_threads=args.cpu_threads)
             if args.dry_run:
                 continue
             if not has_raw_output(output_dir):

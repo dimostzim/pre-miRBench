@@ -99,12 +99,22 @@ def read_fasta(path):
         yield name, "".join(parts)
 
 
+def set_seeds(seed):
+    """Seed Python, numpy and TensorFlow; Keras weight initialization, dropout and shuffling use TensorFlow's generator."""
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
+
 def safe_name(name):
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
 
 
-def generate_image(source_dir, sequence, name, image_dir):
+def generate_image(source_dir, sequence, name, image_dir, reuse_existing=False):
     output_path = os.path.join(image_dir, safe_name(name) + ".png")
+    # Images are a deterministic function of the sequence; replicates may reuse them.
+    if reuse_existing and os.path.exists(output_path):
+        return output_path
     jar_path = os.path.join(source_dir, "hairpin_image_generator", "ImageCalc.jar")
     process = subprocess.run(
         ["java", "-jar", jar_path, "-o", output_path, "-s", sequence],
@@ -121,8 +131,9 @@ def generate_image(source_dir, sequence, name, image_dir):
     return output_path
 
 
-def build_dataset(source_dir, positive_fasta, negative_fasta, output_dir):
-    image_dir = os.path.join(output_dir, "images")
+def build_dataset(source_dir, positive_fasta, negative_fasta, output_dir, image_dir=None):
+    reuse_existing = image_dir is not None
+    image_dir = image_dir or os.path.join(output_dir, "images")
     os.makedirs(image_dir, exist_ok=True)
     images = []
     labels = []
@@ -130,7 +141,7 @@ def build_dataset(source_dir, positive_fasta, negative_fasta, output_dir):
 
     for fasta_path, label in ((negative_fasta, 0), (positive_fasta, 1)):
         for name, sequence in read_fasta(fasta_path):
-            image_path = generate_image(source_dir, sequence, name, image_dir)
+            image_path = generate_image(source_dir, sequence, name, image_dir, reuse_existing)
             if not image_path:
                 continue
             image = imageio.imread(image_path)
@@ -212,12 +223,16 @@ def main():
     parser.add_argument("--early_stopping_monitor", default="val_loss")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--image_cache_dir",
+        default=None,
+        help="Directory with <dataset>_dataset/images from an earlier run on the same records; existing images are reused.",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
     require_tensorflow_gpu(args.device)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    set_seeds(args.seed)
 
     source_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deepmir_src")
     model = build_model(source_dir, args.architecture, args.modules, args.dense_units, args.filters)
@@ -231,11 +246,15 @@ def main():
         )
         model.fit(pretrain_x, pretrain_y, batch_size=args.batch_size, epochs=args.pretrain_epochs, shuffle=True)
 
+    def cached_images(dataset):
+        return os.path.join(args.image_cache_dir, dataset, "images") if args.image_cache_dir else None
+
     train_x, train_y, train_names = build_dataset(
         source_dir,
         args.positive_fasta,
         args.negative_fasta,
         os.path.join(args.output, "train_dataset"),
+        cached_images("train_dataset"),
     )
     np.savez_compressed(os.path.join(args.output, "train_names.npz"), train_names)
 
@@ -247,6 +266,7 @@ def main():
             args.validation_positive_fasta,
             args.validation_negative_fasta,
             os.path.join(args.output, "validation_dataset"),
+            cached_images("validation_dataset"),
         )
         np.savez_compressed(os.path.join(args.output, "validation_names.npz"), valid_names)
         validation_data = (valid_x, valid_y)

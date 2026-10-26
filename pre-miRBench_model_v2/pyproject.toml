@@ -1,0 +1,23 @@
+[project]
+name = "premirbench-model-v2"
+version = "2.0.0"
+description = "Training, inference, and evaluation for the pre-miRBench v2 model"
+requires-python = "==3.12.*"
+dependencies = [
+  "joblib==1.6.0",
+  "numpy==2.5.4",
+  "pandas==2.3.1",
+  "scikit-learn==1.7.1",
+  "scipy==1.18.1",
+  "torch==2.9.0",
+  "xgboost==3.4.1",
+]
+
+# The Agentomics model environment used the CUDA 12.8 build 2.9.0+cu128.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

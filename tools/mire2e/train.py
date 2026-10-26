@@ -117,11 +117,16 @@ def main():
     parser.add_argument("--validation_split", type=float, default=0.2)
     args = parser.parse_args()
 
+    args.output = os.path.abspath(args.output)
     os.makedirs(args.output, exist_ok=True)
     require_torch_gpu(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
     tr.manual_seed(args.seed)
+    tr.backends.cudnn.deterministic = True
+    tr.backends.cudnn.benchmark = False
+    # Upstream saves its best checkpoints (trained_*.pkl) to the working directory; keep them in this run's folder.
+    os.chdir(args.output)
 
     model = MiRe2e(
         device=args.device,

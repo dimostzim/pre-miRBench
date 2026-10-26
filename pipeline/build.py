@@ -52,8 +52,8 @@ def parse_args():
     )
     parser.add_argument(
         "--heldout-species",
-        default="gga,dme",
-        help="Comma-separated held-out species. Default: gga,dme.",
+        default="gga,dme,dan,dya",
+        help="Comma-separated held-out species. Default: gga,dme,dan,dya.",
     )
     parser.add_argument(
         "--resume",

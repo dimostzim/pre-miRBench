@@ -40,7 +40,8 @@ def write_rows(path, rows, extra_fields=None):
         "label",
     ]
     fields = list(base_fields)
-    for field in extra_fields or []:
+    # Keep any additional pool columns (e.g. the hairpin interval) alongside the mining scores.
+    for field in [*(rows[0].keys() if rows else []), *(extra_fields or [])]:
         if field not in fields:
             fields.append(field)
     with open(path, "w", newline="") as handle:
