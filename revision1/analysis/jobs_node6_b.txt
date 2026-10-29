@@ -1,0 +1,2 @@
+mustard gga /SCRATCH/dtzim01/premirbench-v3/genome_eval/mustard_gga/predictions.csv
+deepmirgene gga /SCRATCH/dtzim01/premirbench-v3/genome_eval/deepmirgene_gga/predictions.csv

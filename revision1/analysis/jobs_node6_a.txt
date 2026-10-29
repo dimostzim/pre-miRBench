@@ -1,0 +1,12 @@
+mirmachine_retrained_genome_cutoffs dme /SCRATCH/dtzim01/premirbench-v3/mirmachine/comparison/dme.genome_predictions.csv
+mirmachine_retrained_genome_cutoffs dan /SCRATCH/dtzim01/premirbench-v3/mirmachine/comparison/dan.genome_predictions.csv
+mirmachine_retrained_genome_cutoffs dya /SCRATCH/dtzim01/premirbench-v3/mirmachine/comparison/dya.genome_predictions.csv
+mirmachine_retrained_genome_cutoffs gga /SCRATCH/dtzim01/premirbench-v3/mirmachine/comparison/gga.genome_predictions.csv
+ncortho_training_family_refs gga /SCRATCH/dtzim01/premirbench-v3/comparators/ncortho/ncortho_training_family_refs_gga.genome_predictions.csv
+deepmir gga /SCRATCH/dtzim01/premirbench-v3/genome_eval/deepmir_gga/predictions.csv
+mustard dme /SCRATCH/dtzim01/premirbench-v3/genome_eval/mustard_dme/predictions.csv
+mustard dan /SCRATCH/dtzim01/premirbench-v3/genome_eval/mustard_dan/predictions.csv
+mustard dya /SCRATCH/dtzim01/premirbench-v3/genome_eval/mustard_dya/predictions.csv
+deepmirgene dme /SCRATCH/dtzim01/premirbench-v3/genome_eval/deepmirgene_dme/predictions.csv
+deepmirgene dan /SCRATCH/dtzim01/premirbench-v3/genome_eval/deepmirgene_dan/predictions.csv
+deepmirgene dya /SCRATCH/dtzim01/premirbench-v3/genome_eval/deepmirgene_dya/predictions.csv

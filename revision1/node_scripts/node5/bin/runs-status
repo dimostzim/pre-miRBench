@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""runs-status: read-only status of long runs, tmux sessions, containers, GPU and disk.
+
+Usage: runs-status [HOST ...] [--all] [--run DIR ...] [--since-hours N] [--stall-minutes N]
+
+  HOST             SSH alias (for example biogemt-4) or "local" (the default)
+  --all            check biogemt-1, biogemt-3, biogemt-4, biogemt-5 and biogemt-6
+  --run DIR        also report this run directory (for runs not started with run.sh's registry)
+  --since-hours N  show DONE and FAILED runs that ended in the last N hours (default 48)
+  --stall-minutes N  mark a run STALLED when its log has not changed for N minutes (default 30)
+
+Run states: RUNNING, STALLED (alive, log silent), DONE, FAILED, LOST (no marker and runner gone).
+Hosts are checked one at a time over SSH; the remote side needs only python3. Nothing is written.
+Exit code 1 if any host could not be reached.
+"""
+import argparse
+import datetime
+import json
+import os
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import time
+
+ALL_HOSTS = ["biogemt-1", "biogemt-3", "biogemt-4", "biogemt-5", "biogemt-6"]
+SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+            "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3"]
+SSH_TIMEOUT = 150
+
+
+def run(cmd, timeout=15):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def parse_time(text):
+    try:
+        return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def tail_lines(path, size=65536):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - size))
+            return f.read().decode(errors="replace").splitlines()
+    except OSError:
+        return []
+
+
+def runner_alive(pid_file):
+    try:
+        pid = int(open(pid_file).read().strip())
+    except (OSError, ValueError):
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    cmdline = f"/proc/{pid}/cmdline"
+    if os.path.exists(cmdline):
+        return b"run.sh" in open(cmdline, "rb").read()
+    return True
+
+
+def job_info(run_dir, now, stall_s):
+    info = {"run_dir": run_dir, "name": os.path.basename(run_dir.rstrip("/"))}
+    try:
+        meta = json.load(open(os.path.join(run_dir, "run_metadata.json")))
+    except (OSError, ValueError):
+        meta = {}
+    info["name"] = meta.get("name", info["name"])
+    started = parse_time(meta.get("started"))
+    marker = {}
+    for status in ("DONE", "FAILED"):
+        path = os.path.join(run_dir, status)
+        if os.path.exists(path):
+            for line in open(path, errors="replace"):
+                key, _, value = line.rstrip("\n").partition("=")
+                marker[key] = value
+            marker.setdefault("status", status)
+    log = os.path.join(run_dir, "log.txt")
+    lines = [l.strip() for l in tail_lines(log) if l.strip()]
+    progress = [l for l in lines if l.startswith("PROGRESS")]
+    info["last_line"] = next((l for l in reversed(lines) if not l.startswith("=== ")), "")[:160]
+    info["progress"] = progress[-1][len("PROGRESS"):].strip()[:120] if progress else ""
+    log_age = now - os.path.getmtime(log) if os.path.exists(log) else None
+    info["log_silent_min"] = int(log_age // 60) if log_age is not None else None
+
+    units_path = os.path.join(run_dir, "units.tsv")
+    if os.path.exists(units_path):
+        counts = {}
+        for line in open(units_path, errors="replace"):
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) >= 2 and cols[1].lower() != "status":
+                counts[cols[1].lower()] = counts.get(cols[1].lower(), 0) + 1
+        info["units"] = counts
+
+    if marker:
+        info["state"] = marker.get("status")
+        info["ended"] = parse_time(marker.get("ended"))
+        info["elapsed_s"] = int(marker.get("seconds") or 0)
+        info["reasons"] = marker.get("reasons", "")
+        info["issue_lines"] = int(marker.get("issue_lines") or 0)
+    elif runner_alive(os.path.join(run_dir, "runner.pid")):
+        info["state"] = "STALLED" if log_age is not None and log_age > stall_s else "RUNNING"
+        info["elapsed_s"] = int(now - started) if started else None
+    else:
+        info["state"] = "LOST"
+        info["elapsed_s"] = int(now - started) if started else None
+    return info
+
+
+def collect(args):
+    """Runs on the target host and returns plain data."""
+    now = time.time()
+    home = os.path.expanduser("~")
+    data = {"hostname": socket.gethostname(), "now": now, "cpus": os.cpu_count(),
+            "load": os.getloadavg()[0]}
+
+    disks, seen = [], set()
+    for path in ("/", home, "/SCRATCH"):
+        try:
+            st = os.statvfs(path)
+            dev = os.stat(path).st_dev
+        except OSError:
+            continue
+        if dev in seen:
+            continue
+        seen.add(dev)
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        if total:
+            disks.append({"path": path, "used_pct": round(100 * (total - free) / total), "free": free})
+    data["disks"] = disks
+
+    gpu = None
+    if shutil.which("nvidia-smi"):
+        out = run(["nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.used,memory.total",
+                   "--format=csv,noheader,nounits"])
+        gpu = [l.split(", ") for l in out.splitlines()] if out else "nvidia-smi failed"
+    data["gpu"] = gpu
+
+    tmux = []
+    if shutil.which("tmux"):
+        out = run(["tmux", "list-sessions", "-F", "#{session_name}\t#{session_created}"])
+        for line in (out or "").splitlines():
+            name, _, created = line.partition("\t")
+            pane = run(["tmux", "capture-pane", "-p", "-t", f"={name}:", "-S", "-30"]) or ""
+            last = next((l.strip() for l in reversed(pane.splitlines()) if l.strip()), "")
+            tmux.append({"name": name, "created": int(created or 0), "last": last[:160]})
+    data["tmux"] = tmux
+
+    containers = None
+    if shutil.which("docker"):
+        out = run(["docker", "ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}"])
+        containers = [l.split("\t") for l in out.splitlines()] if out is not None else "docker ps failed"
+    data["containers"] = containers
+
+    dirs = []
+    state_dir = os.environ.get("XDG_STATE_HOME") or os.path.join(home, ".local", "state")
+    index = os.path.join(state_dir, "long-runs", "index.tsv")
+    host = socket.gethostname()
+    if os.path.exists(index):
+        for line in open(index, errors="replace"):
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) >= 3 and cols[1] == host and cols[2] not in dirs:
+                dirs.append(cols[2])
+    jobs = []
+    for d in dirs + [d for d in args["runs"] if d not in dirs]:
+        if not os.path.isdir(d):
+            if d in args["runs"]:
+                jobs.append({"run_dir": d, "name": os.path.basename(d), "state": "MISSING"})
+            continue
+        info = job_info(d, now, args["stall_minutes"] * 60)
+        recent = info.get("ended") and now - info["ended"] < args["since_hours"] * 3600
+        if info["state"] in ("RUNNING", "STALLED", "LOST") or recent or d in args["runs"]:
+            jobs.append(info)
+    data["jobs"] = jobs
+    return data
+
+
+def human(n):
+    for unit in ("B", "K", "M", "G", "T"):
+        if n < 1024 or unit == "T":
+            return f"{n:.0f}{unit}" if unit in ("B", "K", "M") else f"{n:.1f}{unit}"
+        n /= 1024
+
+
+def duration(seconds):
+    if seconds is None:
+        return "?"
+    m = seconds // 60
+    h, m = divmod(m, 60)
+    d, h = divmod(h, 24)
+    return f"{d}d{h:02d}h" if d else f"{h}h{m:02d}m"
+
+
+def report(alias, data):
+    when = datetime.datetime.fromtimestamp(data["now"], datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    print(f"== {alias} ({data['hostname']}) {when}  load {data['load']:.0f}/{data['cpus']} CPUs")
+    print("disk: " + "  ".join(
+        f"{d['path']} {d['used_pct']}% used, {human(d['free'])} free" + (" LOW" if d["used_pct"] >= 90 else "")
+        for d in data["disks"]))
+    gpu = data["gpu"]
+    if isinstance(gpu, list):
+        for g in gpu:
+            if len(g) == 5:
+                print(f"gpu{g[0]} {g[1]}: {g[2]}% util, {int(g[3]) / 1024:.1f}/{int(g[4]) / 1024:.1f} GiB")
+    elif gpu:
+        print(f"gpu: {gpu}")
+    print("runs:" if data["jobs"] else "runs: none recorded")
+    for j in data["jobs"]:
+        line = f"  {j['state']:<8} {j['name']}  {duration(j.get('elapsed_s'))}"
+        if j.get("progress"):
+            line += f"  PROGRESS {j['progress']}"
+        if j["state"] == "STALLED":
+            line += f"  log silent {j['log_silent_min']} min"
+        if j.get("units"):
+            line += "  units " + " ".join(f"{k}={v}" for k, v in sorted(j["units"].items()))
+        print(line)
+        if j.get("reasons"):
+            print(f"           reasons: {j['reasons']}")
+        if j.get("issue_lines"):
+            print(f"           log lines to check: {j['issue_lines']} (issues.txt)")
+        if j.get("last_line") and j["state"] != "DONE":
+            print(f"           last: {j['last_line']}")
+        print(f"           {j['run_dir']}")
+    if data["tmux"]:
+        print("tmux:")
+        for t in data["tmux"]:
+            created = datetime.datetime.fromtimestamp(t["created"], datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
+            print(f"  {t['name']} (since {created}): {t['last']}")
+    containers = data["containers"]
+    if isinstance(containers, list) and containers:
+        print(f"containers (all users): {len(containers)} running")
+        for c in containers[:15]:
+            print("  " + "  ".join(c))
+    elif isinstance(containers, str):
+        print(f"containers: {containers}")
+
+
+def main():
+    if len(sys.argv) > 2 and sys.argv[1] == "--collect":
+        print(json.dumps(collect(json.loads(sys.argv[2]))))
+        return 0
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("hosts", nargs="*")
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--run", action="append", default=[])
+    p.add_argument("--since-hours", type=float, default=48)
+    p.add_argument("--stall-minutes", type=float, default=30)
+    a = p.parse_args()
+    hosts = (ALL_HOSTS if a.all else []) + [h for h in a.hosts if not (a.all and h in ALL_HOSTS)]
+    hosts = hosts or ["local"]
+    args = {"runs": a.run, "since_hours": a.since_hours, "stall_minutes": a.stall_minutes}
+    source = open(os.path.abspath(__file__)).read()
+    unreachable = 0
+    for i, host in enumerate(hosts):
+        if i:
+            print()
+        if host == "local":
+            report("local", collect(args))
+            continue
+        try:
+            remote = "python3 - --collect " + shlex.quote(json.dumps(args))
+            r = subprocess.run(["ssh", *SSH_OPTS, host, remote],
+                               input=source, capture_output=True, text=True, timeout=SSH_TIMEOUT)
+            data = json.loads(r.stdout) if r.returncode == 0 else None
+            error = (r.stderr.strip().splitlines() or [f"exit code {r.returncode}"])[-1]
+        except subprocess.TimeoutExpired:
+            data, error = None, f"no answer within {SSH_TIMEOUT} s"
+        except ValueError:
+            data, error = None, "could not parse the remote output"
+        if data is None:
+            unreachable += 1
+            hint = " (VPN off?)" if any(s in error for s in ("timed out", "unreachable", "no answer")) else ""
+            print(f"== {host}: UNREACHABLE{hint}: {error}")
+        else:
+            report(host, data)
+    return 1 if unreachable else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
